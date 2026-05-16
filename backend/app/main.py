@@ -12,9 +12,9 @@ import os
 
 from app.config import settings
 from app.models.database import init_db, close_db
-from app.api.routes import scraper, jobs, exports, auth
+from app.api.routes import scraper, jobs, exports, auth, products
 # Add to imports
-from app.api.routes import scraper, jobs, exports, auth, websocket
+from app.api.routes import scraper, jobs, exports, auth, websocket, products
 
 # Configure logging
 logging.basicConfig(
@@ -135,6 +135,12 @@ app.include_router(
     auth.router,
     prefix=f"{settings.API_PREFIX}/auth",
     tags=["Authentication"]
+)
+
+app.include_router(
+    products.router,
+    prefix=f"{settings.API_PREFIX}/products",
+    tags=["Products"]
 )
 
 # Add WebSocket router (add after other routers)

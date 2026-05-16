@@ -79,33 +79,67 @@ async def start_scraping(
         )
 
 
+# @router.post("/preview", response_model=DetectedSelectors)
+# async def preview_scraping(request: ScraperPreviewRequest):
+#     """
+#     Preview scraping for a URL.
+    
+#     This endpoint analyzes the given URL and returns:
+#     - Detected selectors for product extraction
+#     - Sample products extracted with those selectors
+#     - Platform detection (Shopify, WooCommerce, etc.)
+#     """
+#     try:
+#         detector = PatternDetector()
+#         result = await detector.analyze_page(str(request.url))
+        
+#         return DetectedSelectors(
+#             confidence=result.get("confidence", 0.0),
+#             platform=result.get("platform"),
+#             selectors=result.get("selectors", {}),
+#             sample_products=result.get("sample_products", [])
+#         )
+        
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Failed to analyze URL: {str(e)}"
+#         )
+
 @router.post("/preview", response_model=DetectedSelectors)
 async def preview_scraping(request: ScraperPreviewRequest):
-    """
-    Preview scraping for a URL.
-    
-    This endpoint analyzes the given URL and returns:
-    - Detected selectors for product extraction
-    - Sample products extracted with those selectors
-    - Platform detection (Shopify, WooCommerce, etc.)
-    """
     try:
+        import httpx
+
         detector = PatternDetector()
-        result = await detector.analyze_page(str(request.url))
-        
+
+        # 1 Fetch page HTML
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            response = await client.get(str(request.url), headers=headers)
+            response.raise_for_status()
+            html = response.text
+
+        # 2 Analyze HTML
+        result = await detector.analyze_page(
+            html,
+            str(request.url)
+        )
+
         return DetectedSelectors(
             confidence=result.get("confidence", 0.0),
             platform=result.get("platform"),
             selectors=result.get("selectors", {}),
             sample_products=result.get("sample_products", [])
         )
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to analyze URL: {str(e)}"
         )
-
 
 @router.post("/detect-platform")
 async def detect_platform(url: str):
@@ -216,8 +250,14 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
             await db.commit()
             
             # Run scraper
-            engine = ScraperEngine()
-            await engine.run(job_id, url, config, db)
+            engine = ScraperEngine(
+                db=db,
+                job_id=job_id,
+                start_url=url,
+                max_depth=config.max_depth if config else 3,
+                max_pages=config.max_pages if config else 100
+            )
+            await engine.start()
             
         except Exception as e:
             # Update job with error

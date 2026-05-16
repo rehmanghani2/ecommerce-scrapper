@@ -14,6 +14,7 @@ from app.config import settings
 
 import redis.asyncio as redis
 
+from app.services.redis_subscriber import RedisSubscriber
 
 
 logger = logging.getLogger(__name__)
@@ -167,3 +168,28 @@ async def job_updates_websocket(
         
     except Exception as e:
         logger.error(f"Job WebSocket error: {e}")
+ 
+ 
+        
+# NEW FROM 
+@router.websocket("/ws/{job_id}")
+async def job_ws(websocket: WebSocket, job_id: str):
+    await websocket.accept()
+
+    subscriber = RedisSubscriber()
+    await subscriber.connect()
+
+    async def send_to_client(message: dict):
+        await websocket.send_json(message)
+
+    try:
+        await subscriber.subscribe(
+            channel=f"job:{job_id}",
+            message_handler=send_to_client
+        )
+
+    except WebSocketDisconnect:
+        pass
+
+    finally:
+        await subscriber.close()

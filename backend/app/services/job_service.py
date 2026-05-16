@@ -3,16 +3,16 @@ Job Service Module
 Handles job management operations.
 """
 
-import asyncio
 from typing import Optional, Dict, Any
-from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 import logging
 
+from app.services.job_queue_service import JobQueueService
+
 from app.models.job import Job, JobStatus, JobType
 from app.models.product import Product
-from app.core.scraper_engine import ScraperEngine, ScraperConfig
+# from app.core.scraper_engine import ScraperEngine, ScraperConfig
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class JobService:
     def __init__(self, db: AsyncSession):
         """Initialize the job service."""
         self.db = db
-        self._running_jobs: Dict[str, ScraperEngine] = {}
+        # self._running_jobs: Dict[str, ScraperEngine] = {}
     
     async def create_job(
         self,
@@ -74,6 +74,15 @@ class JobService:
         
         logger.info(f"Created job {job.job_id} for {domain}")
         
+        
+        # Enqueue job
+        try:
+            queue = JobQueueService()
+            await queue.enqueue(job.job_id)
+            await queue.close()
+        except Exception as e:
+            logger.warning(f"Failed to enqueue job in Redis: {e}")
+                
         return job
     
     async def get_job(self, job_id: str) -> Optional[Job]:
@@ -137,84 +146,108 @@ class JobService:
             "pages": (total + page_size - 1) // page_size
         }
     
-    async def start_job(self, job_id: str) -> bool:
-        """
-        Start a pending job.
-        
-        Args:
-            job_id: Job ID to start
-        
-        Returns:
-            True if job was started
-        """
-        job = await self.get_job(job_id)
-        if not job:
-            return False
-        
-        if job.status not in [JobStatus.PENDING, JobStatus.PAUSED]:
-            return False
-        
-        # Create scraper engine
-        config_dict = job.config or {}
-        config = ScraperConfig(**config_dict) if config_dict else ScraperConfig()
-        
-        engine = ScraperEngine(config)
-        self._running_jobs[job_id] = engine
-        
-        # Start job in background
-        asyncio.create_task(self._run_job(job, engine))
-        
-        return True
-    
-    async def _run_job(self, job: Job, engine: ScraperEngine) -> None:
-        """Run a job in the background."""
-        try:
-            result = await engine.run(
-                job_id=job.id,
-                start_url=job.url,
-                db=self.db
-            )
-            
-            logger.info(f"Job {job.job_id} completed: {result}")
-            
-        except Exception as e:
-            logger.error(f"Job {job.job_id} failed: {e}")
-            
-            job.status = JobStatus.FAILED
-            job.error_message = str(e)
-            job.completed_at = datetime.utcnow()
+    async def increment_pages(self, job_id: int) -> int:
+        """Increment the number of scraped pages for a job."""
+        job = await self.db.get(Job, job_id)
+        if job:
+            job.scraped_pages = (job.scraped_pages or 0) + 1
             await self.db.commit()
+            return job.scraped_pages
+        return 0
+    
+    async def update_job_status(self, job_id: int, status: JobStatus, error: Optional[str] = None):
+        """Update job status and optional error message."""
+        job = await self.db.get(Job, job_id)
+        if job:
+            job.status = status
+            if error:
+                job.error_message = error
+            if status == JobStatus.RUNNING and not job.started_at:
+                from datetime import datetime
+                job.started_at = datetime.utcnow()
+            elif status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
+                from datetime import datetime
+                job.completed_at = datetime.utcnow()
+            await self.db.commit()
+    
+    # async def start_job(self, job_id: str) -> bool:
+    #     """
+    #     Start a pending job.
         
-        finally:
-            # Remove from running jobs
-            if job.job_id in self._running_jobs:
-                del self._running_jobs[job.job_id]
+    #     Args:
+    #         job_id: Job ID to start
+        
+    #     Returns:
+    #         True if job was started
+    #     """
+    #     job = await self.get_job(job_id)
+    #     if not job:
+    #         return False
+        
+    #     if job.status not in [JobStatus.PENDING, JobStatus.PAUSED]:
+    #         return False
+        
+    #     # Create scraper engine
+    #     config_dict = job.config or {}
+    #     config = ScraperConfig(**config_dict) if config_dict else ScraperConfig()
+        
+    #     engine = ScraperEngine(config)
+    #     self._running_jobs[job_id] = engine
+        
+    #     # Start job in background
+    #     asyncio.create_task(self._run_job(job, engine))
+        
+    #     return True
     
-    async def pause_job(self, job_id: str) -> bool:
-        """Pause a running job."""
-        if job_id in self._running_jobs:
-            self._running_jobs[job_id].pause()
+    # async def _run_job(self, job: Job, engine: ScraperEngine) -> None:
+    #     """Run a job in the background."""
+    #     try:
+    #         result = await engine.run(
+    #             job_id=job.id,
+    #             start_url=job.url,
+    #             db=self.db
+    #         )
             
-            job = await self.get_job(job_id)
-            if job:
-                job.status = JobStatus.PAUSED
-                await self.db.commit()
+    #         logger.info(f"Job {job.job_id} completed: {result}")
             
-            return True
-        return False
+    #     except Exception as e:
+    #         logger.error(f"Job {job.job_id} failed: {e}")
+            
+    #         job.status = JobStatus.FAILED
+    #         job.error_message = str(e)
+    #         job.completed_at = datetime.utcnow()
+    #         await self.db.commit()
+        
+    #     finally:
+    #         # Remove from running jobs
+    #         if job.job_id in self._running_jobs:
+    #             del self._running_jobs[job.job_id]
     
-    async def resume_job(self, job_id: str) -> bool:
-        """Resume a paused job."""
-        if job_id in self._running_jobs:
-            self._running_jobs[job_id].resume()
+    # async def pause_job(self, job_id: str) -> bool:
+    #     """Pause a running job."""
+    #     if job_id in self._running_jobs:
+    #         self._running_jobs[job_id].pause()
             
-            job = await self.get_job(job_id)
-            if job:
-                job.status = JobStatus.RUNNING
-                await self.db.commit()
+    #         job = await self.get_job(job_id)
+    #         if job:
+    #             job.status = JobStatus.PAUSED
+    #             await self.db.commit()
             
-            return True
-        return False
+    #         return True
+    #     return False
+    
+    # async def resume_job(self, job_id: str) -> bool:
+    #     """Resume a paused job."""
+    #     if job_id in self._running_jobs:
+    #         self._running_jobs[job_id].resume()
+            
+    #         job = await self.get_job(job_id)
+    #         if job:
+    #             job.status = JobStatus.RUNNING
+    #             await self.db.commit()
+            
+    #         return True
+    #     return False
     
     async def cancel_job(self, job_id: str) -> bool:
         """Cancel a running job."""
@@ -230,20 +263,20 @@ class JobService:
         
         return False
     
-    async def delete_job(self, job_id: str) -> bool:
-        """Delete a job and its products."""
-        job = await self.get_job(job_id)
-        if not job:
-            return False
+    # async def delete_job(self, job_id: str) -> bool:
+    #     """Delete a job and its products."""
+    #     job = await self.get_job(job_id)
+    #     if not job:
+    #         return False
         
-        if job.status == JobStatus.RUNNING:
-            await self.cancel_job(job_id)
+    #     if job.status == JobStatus.RUNNING:
+    #         await self.cancel_job(job_id)
         
-        await self.db.delete(job)
-        await self.db.commit()
+    #     await self.db.delete(job)
+    #     await self.db.commit()
         
-        logger.info(f"Deleted job {job_id}")
-        return True
+    #     logger.info(f"Deleted job {job_id}")
+    #     return True
     
     async def get_job_products(
         self,

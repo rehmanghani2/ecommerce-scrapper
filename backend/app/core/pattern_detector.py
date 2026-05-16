@@ -154,6 +154,20 @@ class PatternDetector:
                     break
         return count
 
+    async def analyze_page(self, html: str, url: str) -> dict:
+        """
+        Public async wrapper used by API routes.
+        Internally delegates to detect().
+        """
+
+        result = self.detect(html, url)
+
+        return {
+            "url": url,
+            "page_type": result["type"].value,
+            "confidence": result["confidence"],
+            "signals": result["signals"],
+        }
 
 
 

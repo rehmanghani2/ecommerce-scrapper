@@ -22,9 +22,8 @@ router = APIRouter()
 async def list_jobs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status: Optional[JobStatus] = Query(None),
-    # status: Optional[JobStatus] = None,
-    domain: Optional[str] = None,
+    status: Optional[str] = Query(None),
+    domain: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     """

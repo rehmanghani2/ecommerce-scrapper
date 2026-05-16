@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     DATABASE_MAX_OVERFLOW: int = 10
     
     # Redis Settings
+    REDIS_HOST: str = Field(default="redis://localhost:6379/0")
+#     REDIS_PORT: str = Field(default="6379")
+#     REDIS_DB: str = Field(
+#        default="sqlite+aiosqlite:///./ecommerce_scraper.db",
+#        env="DATABASE_URL"
+#    )
     REDIS_URL: str = Field(default="redis://localhost:6379/0")
     CELERY_BROKER_URL: str = Field(default="redis://localhost:6379/1")
     CELERY_RESULT_BACKEND: str = Field(default="redis://localhost:6379/2")

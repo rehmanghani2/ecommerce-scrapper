@@ -20,6 +20,7 @@ This file does NOT:
 """
 
 from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.url_frontier import URLFrontier
 from app.core.crawl_scheduler import CrawlScheduler
@@ -28,10 +29,11 @@ from app.core.link_extractor import LinkExtractor
 from app.core.browser_manager import BrowserManager
 
 from app.services.job_service import JobService
+
+from app.services.job_event_notifier import JobEventNotifier
 from app.utils.logger import get_logger
-
 logger = get_logger(__name__)
-
+# logger = logging.getLogger(__name__)
 
 class ScraperEngine:
     """
@@ -39,15 +41,18 @@ class ScraperEngine:
     One instance = one crawl job.
     """
 
-    def __init__(self, job_id: str, start_url: str, *, max_depth: int = 3, max_pages: int = 500):
+    def __init__(self, db: AsyncSession, job_id: int, start_url: str, *, max_depth: int = 3, max_pages: int = 500):
+        self.db = db
         self.job_id = job_id
         self.start_url = start_url
         self.max_depth = max_depth
         self.max_pages = max_pages
 
-        self._job_service = JobService()
+        self._job_service = JobService(db)
         self._browser_manager: Optional[BrowserManager] = None
         self._scheduler: Optional[CrawlScheduler] = None
+        
+        self._notifier = JobEventNotifier()
 
     async def start(self):
         """
@@ -55,15 +60,43 @@ class ScraperEngine:
         SAFE: preserves existing behaviour.
         """
         logger.info(f"[Job {self.job_id}] Starting scraper engine")
-        await self._job_service.mark_running(self.job_id)
+        await self._notifier.connect()
+        
+        from app.models.job import JobStatus
+        await self._job_service.update_job_status(self.job_id, JobStatus.RUNNING)
+        
+        await self._notifier.publish(
+            f"job:{self.job_id}",
+            {
+                "event": "job_started",
+                "status": "running"
+            }
+        )
 
         try:
             await self._run()
-            await self._job_service.mark_completed(self.job_id)
+            from app.models.job import JobStatus
+            await self._job_service.update_job_status(self.job_id, JobStatus.COMPLETED)
+            await self._notifier.publish(
+                f"job:{self.job_id}",
+                {
+                    "event": "job_completed",
+                    "status": "completed"
+                }
+            )
             logger.info(f"[Job {self.job_id}] Completed successfully")
         except Exception as exc:
             logger.exception(f"[Job {self.job_id}] Failed")
-            await self._job_service.mark_failed(self.job_id, str(exc))
+            from app.models.job import JobStatus
+            await self._job_service.update_job_status(self.job_id, JobStatus.FAILED, str(exc))
+            await self._notifier.publish(
+                f"job:{self.job_id}",
+                {
+                    "event": "job_failed",
+                    "status": "failed",
+                    "error": str(exc)
+                }
+            )
         finally:
             await self._shutdown()
 
@@ -99,8 +132,18 @@ class ScraperEngine:
         Callback from scheduler after each page.
         Used for progress reporting.
         """
-        await self._job_service.increment_pages(self.job_id)
+        pages = await self._job_service.increment_pages(self.job_id)
+
         logger.debug(f"[Job {self.job_id}] Crawled: {url} | success={success}")
+        await self._notifier.publish(
+            f"job:{self.job_id}",
+            {
+                "event": "page_crawled",
+                "url": url,
+                "success": success,
+                "pages_crawled": pages
+            }
+        )    
 
     async def _shutdown(self):
         """
@@ -111,7 +154,8 @@ class ScraperEngine:
 
         if self._browser_manager:
             await self._browser_manager.close()
-
+        
+        await self._notifier.close()
 
 
 
