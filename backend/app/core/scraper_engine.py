@@ -19,13 +19,14 @@ This file does NOT:
 - Contain Playwright low-level logic
 """
 
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.url_frontier import URLFrontier
 from app.core.crawl_scheduler import CrawlScheduler
 from app.core.page_fetcher import PageFetcher
 from app.core.link_extractor import LinkExtractor
+from app.core.product_extractor import ProductExtractor
 from app.core.browser_manager import BrowserManager
 
 from app.services.job_service import JobService
@@ -86,9 +87,22 @@ class ScraperEngine:
             )
             logger.info(f"[Job {self.job_id}] Completed successfully")
         except Exception as exc:
-            logger.exception(f"[Job {self.job_id}] Failed")
+            import traceback
+            error_trace = traceback.format_exc()
+            logger.error(f"[Job {self.job_id}] Failed: {exc}\n{error_trace}")
+            
             from app.models.job import JobStatus
-            await self._job_service.update_job_status(self.job_id, JobStatus.FAILED, str(exc))
+            error_msg = str(exc) or "Unknown internal error in ScraperEngine"
+            await self._job_service.update_job_status(self.job_id, JobStatus.FAILED, error_msg)
+            
+            # Also try to update the trace if the model supports it
+            try:
+                job = await self.db.get(Job, self.job_id)
+                if job:
+                    job.error_trace = error_trace
+                    await self.db.commit()
+            except Exception:
+                pass
             await self._notifier.publish(
                 f"job:{self.job_id}",
                 {
@@ -104,28 +118,86 @@ class ScraperEngine:
         """
         Internal orchestration logic.
         """
+        logger.info(f"[Job {self.job_id}] Step 1: Starting BrowserManager")
         self._browser_manager = BrowserManager()
         await self._browser_manager.start()
+        logger.info(f"[Job {self.job_id}] Step 2: Browser started OK")
 
         page = await self._browser_manager.new_page()
+        logger.info(f"[Job {self.job_id}] Step 3: New page created")
 
         frontier = URLFrontier(
             start_url=self.start_url,
             max_depth=self.max_depth,
             max_pages=self.max_pages,
         )
+        logger.info(f"[Job {self.job_id}] Step 4: URLFrontier created for {self.start_url}")
 
         fetcher = PageFetcher(page)
-        extractor = LinkExtractor(frontier.base_domain)
+        extractor = LinkExtractor(frontier.allowed_domain)
+        product_extractor = ProductExtractor()
+        logger.info(f"[Job {self.job_id}] Step 5: Fetcher/Extractor/ProductExtractor ready")
 
         self._scheduler = CrawlScheduler(
             frontier=frontier,
             fetcher=fetcher,
             extractor=extractor,
+            product_extractor=product_extractor,
             on_page_crawled=self._on_page_crawled,
+            on_products_found=self._on_products_found,
         )
+        logger.info(f"[Job {self.job_id}] Step 6: CrawlScheduler created, starting run...")
 
         await self._scheduler.run()
+        logger.info(f"[Job {self.job_id}] Step 7: CrawlScheduler.run() returned")
+
+    async def _on_products_found(self, products_data: List[Dict[str, Any]]):
+        """
+        Callback from scheduler when products are found on a page.
+        Saves products to database.
+        """
+        from app.models.product import Product
+        import re
+
+        saved_count = 0
+        for data in products_data:
+            try:
+                # Basic cleaning of price
+                price_val = None
+                if data.get("price"):
+                    price_str = str(data["price"])
+                    # Extract numeric value from string like "£12.34"
+                    price_match = re.search(r"(\d+\.?\d*)", price_str)
+                    if price_match:
+                        price_val = float(price_match.group(1))
+
+                product = Product(
+                    job_id=self.job_id,
+                    name=data.get("name", "Unknown Product"),
+                    url=data.get("url"),
+                    price=price_val,
+                    price_text=data.get("price"),
+                    image_url=data.get("image_url"),
+                    source_domain=self.start_url.split("//")[-1].split("/")[0]
+                )
+                self.db.add(product)
+                saved_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to prepare product for saving: {e}")
+
+        if saved_count > 0:
+            logger.info(f"[Job {self.job_id}] Saving {saved_count} products...")
+            await self.db.commit()
+            logger.info(f"[Job {self.job_id}] Successfully saved {saved_count} products to database")
+            
+            # Notify progress
+            await self._notifier.publish(
+                f"job:{self.job_id}",
+                {
+                    "event": "products_found",
+                    "count": saved_count
+                }
+            )
 
     async def _on_page_crawled(self, url: str, success: bool):
         """

@@ -121,6 +121,7 @@ class Product(Base):
             "original_price": float(self.original_price) if self.original_price else None,
             "sale_price": float(self.sale_price) if self.sale_price else None,
             "currency": self.currency,
+            "price_text": self.price_text,
             "in_stock": self.in_stock,
             "stock_quantity": self.stock_quantity,
             "url": self.url,

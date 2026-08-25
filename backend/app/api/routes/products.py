@@ -37,7 +37,11 @@ async def list_products(
     List all products with filtering and pagination.
     """
     # Build query
-    query = select(Product).order_by(desc(Product.scraped_at))
+    from sqlalchemy.orm import selectinload
+    query = select(Product).options(
+        selectinload(Product.images),
+        selectinload(Product.variants)
+    ).order_by(desc(Product.scraped_at))
     count_query = select(func.count(Product.id))
     
     # Apply filters

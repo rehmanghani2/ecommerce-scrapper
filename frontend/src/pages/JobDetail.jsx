@@ -30,6 +30,7 @@ export default function JobDetail() {
   const { jobId } = useParams()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(0)
+  const [productsCount, setProductsCount] = useState(null)
 
   // Fetch job data
   const { data: job, isLoading, error } = useJob(jobId)
@@ -38,6 +39,20 @@ export default function JobDetail() {
   const { data: realTimeData, isConnected } = useJobWebSocket(
     job?.status === 'running' ? jobId : null
   )
+
+  // Dynamically fetch actual product count for menu tab
+  React.useEffect(() => {
+    if (!job?.job_id) return
+    import('../services/jobService').then(({ default: svc }) => {
+      svc.getJobProducts(job.job_id, { page: 1, page_size: 1 })
+        .then(data => {
+          if (data && data.total !== undefined) {
+            setProductsCount(data.total)
+          }
+        })
+        .catch(() => {})
+    })
+  }, [job?.job_id, job?.status, job?.total_products])
 
   const { deleteJob } = useJobActions()
 
@@ -68,6 +83,8 @@ export default function JobDetail() {
   const isRunning = job.status === 'running'
   const isCompleted = job.status === 'completed'
   const isFailed = job.status === 'failed'
+
+  const displayProductsCount = productsCount !== null ? productsCount : (job.total_products || 0)
 
   const tabs = [
     {
@@ -149,8 +166,8 @@ export default function JobDetail() {
     {
       key: 'products',
       label: 'Products',
-      count: job.total_products,
-      content: <JobProducts jobId={job.id} />,
+      count: displayProductsCount,
+      content: <JobProducts jobId={job.job_id} onTotalFetched={setProductsCount} />,
     },
     {
       key: 'logs',
@@ -189,7 +206,7 @@ export default function JobDetail() {
         
         <div className="flex items-center gap-3">
           {isCompleted && (
-            <ExportButton jobId={job.id} />
+            <ExportButton jobId={job.job_id} />
           )}
           <JobActions job={job} onAction={() => {}} />
         </div>
@@ -219,26 +236,119 @@ function DetailItem({ label, value, mono = false }) {
   )
 }
 
-function JobProducts({ jobId }) {
+function JobProducts({ jobId, onTotalFetched }) {
   const [page, setPage] = useState(1)
-  
-  // This would use a hook to fetch products for the job
-  // For now, showing a placeholder
-  
+  const [products, setProducts] = useState([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+
+  React.useEffect(() => {
+    if (!jobId) return
+    setLoading(true)
+    import('../services/jobService').then(({ default: svc }) => {
+      svc.getJobProducts(jobId, { page, page_size: 50 })
+        .then(data => {
+          const tot = data.total || 0
+          setProducts(data.products || [])
+          setTotal(tot)
+          if (onTotalFetched) {
+            onTotalFetched(tot)
+          }
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false))
+    })
+  }, [jobId, page, onTotalFetched])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <p className="text-gray-500 dark:text-gray-400">Loading products...</p>
+      </div>
+    )
+  }
+
+  if (products.length === 0) {
+    return (
+      <EmptyState
+        icon={CubeIcon}
+        title="No products extracted yet"
+        description="Start or retry the job to extract products from this site."
+      />
+    )
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Showing products scraped in this job
+          {total} product{total !== 1 ? 's' : ''} extracted
         </p>
         <ExportButton jobId={jobId} />
       </div>
-      
-      <EmptyState
-        icon={CubeIcon}
-        title="Products will appear here"
-        description="Products extracted during this job will be displayed here."
-      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {products.map((product, idx) => (
+          <div
+            key={product.id || idx}
+            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow duration-200"
+          >
+            {product.image_url && (
+              <div className="aspect-square bg-gray-50 dark:bg-gray-900 overflow-hidden">
+                <img
+                  src={product.image_url}
+                  alt={product.name}
+                  className="w-full h-full object-contain p-2"
+                  onError={(e) => { e.target.style.display = 'none' }}
+                />
+              </div>
+            )}
+            <div className="p-3 space-y-1">
+              <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug">
+                {product.name}
+              </p>
+              {product.price_text && (
+                <p className="text-base font-bold text-primary-600 dark:text-primary-400">
+                  {product.price_text}
+                </p>
+              )}
+              {product.url && (
+                <a
+                  href={product.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-gray-400 hover:text-primary-500 truncate block mt-1"
+                >
+                  View product ↗
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pagination */}
+      {total > 50 && (
+        <div className="flex items-center justify-center gap-2 pt-4">
+          <button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-500">
+            Page {page} of {Math.ceil(total / 50)}
+          </span>
+          <button
+            onClick={() => setPage(p => p + 1)}
+            disabled={page >= Math.ceil(total / 50)}
+            className="px-3 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   )
 }

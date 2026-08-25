@@ -5,10 +5,8 @@ from app.config import settings
 class JobQueueService:
 
     def __init__(self):
-        self._redis = redis.Redis(
-            host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            db=settings.REDIS_DB,
+        self._redis = redis.from_url(
+            settings.REDIS_URL,
             decode_responses=True
         )
 

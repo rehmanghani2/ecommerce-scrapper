@@ -10,7 +10,6 @@ export const authService = {
     formData.append('username', username)
     formData.append('password', password)
     console.log("formData", formData)
-    print("formData ",formData)
     const response = await fetch(`${import.meta.env.VITE_API_URL}/api/v1/auth/token`, {
       method: 'POST',
       headers: {

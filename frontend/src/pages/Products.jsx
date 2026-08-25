@@ -38,10 +38,15 @@ export default function Products() {
   const page = parseInt(searchParams.get('page') || '1', 10)
   const pageSize = viewMode === 'grid' ? 12 : 20
 
+  // Filter out empty strings before sending to API
+  const activeFilters = Object.fromEntries(
+    Object.entries(filters).filter(([_, v]) => v !== '')
+  )
+
   // Fetch products
   const { data, isLoading, error } = useQuery({
-    queryKey: ['products', filters, page, pageSize],
-    queryFn: () => apiGet('/products', { ...filters, page, page_size: pageSize }),
+    queryKey: ['products', activeFilters, page, pageSize],
+    queryFn: () => apiGet('/products', { ...activeFilters, page, page_size: pageSize }),
   })
 
   // Fetch filter options (categories, brands)

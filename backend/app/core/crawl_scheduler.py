@@ -6,11 +6,12 @@ Responsible for orchestrating crawl execution using the URL Frontier.
 
 import asyncio
 import logging
-from typing import Callable, Awaitable, Optional
+from typing import Callable, Awaitable, Optional, List, Dict, Any
 
 from app.core.url_frontier import URLFrontier
 from app.core.page_fetcher import PageFetcher
 from app.core.link_extractor import LinkExtractor
+from app.core.product_extractor import ProductExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +27,18 @@ class CrawlScheduler:
         frontier: URLFrontier,
         fetcher: PageFetcher,
         extractor: LinkExtractor,
+        product_extractor: ProductExtractor,
         on_page_crawled: Optional[Callable[[str, bool], Awaitable[None]]] = None,
+        on_products_found: Optional[Callable[[List[Dict[str, Any]]], Awaitable[None]]] = None,
         max_concurrency: int = 3,
         poll_interval: float = 0.5,
     ):
         self.frontier = frontier
         self.fetcher = fetcher
         self.extractor = extractor
+        self.product_extractor = product_extractor
         self.on_page_crawled = on_page_crawled
+        self.on_products_found = on_products_found
         self.max_concurrency = max_concurrency
         self.poll_interval = poll_interval
 
@@ -98,8 +103,10 @@ class CrawlScheduler:
                 for link in links:
                     await self.frontier.add_url(link, depth + 1)
                 
-                # 3. TODO: Extract products if it's a product page
-                # (This would be handled by ProductExtractor in a real implementation)
+                # 3. Extract products
+                products = self.product_extractor.extract(result.html, url)
+                if products and self.on_products_found:
+                    await self.on_products_found(products)
             
             # 4. Notify progress
             if self.on_page_crawled:

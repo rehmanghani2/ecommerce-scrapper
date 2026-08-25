@@ -45,12 +45,12 @@ export function useJob(jobId) {
 /**
  * Hook for fetching job logs
  */
-export function useJobLogs(jobId, limit = 100) {
+export function useJobLogs(jobId, limit = 500) {
   return useQuery({
     queryKey: ['jobLogs', jobId, limit],
     queryFn: () => jobService.getJobLogs(jobId, limit),
     enabled: !!jobId,
-    refetchInterval: 10000, // Refresh every 10 seconds
+    refetchInterval: 3000, // Poll every 3 seconds for live log updates
   })
 }
 

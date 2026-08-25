@@ -38,7 +38,7 @@ export function ExportButton({ jobId, disabled = false }) {
       
       // Auto-download
       if (data.file_path) {
-        const filename = data.file_path.split('/').pop()
+        const filename = data.file_path.split(/[/\\]/).pop()
         await exportService.downloadExport(filename)
       }
     },

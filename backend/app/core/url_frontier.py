@@ -27,12 +27,12 @@ class URLFrontier:
         self,
         start_url: str,
         max_depth: int = 4,
-        max_urls: int = 10_000,
+        max_pages: int = 10_000,
         allowed_domain: Optional[str] = None,
     ):
         self.start_url = start_url.rstrip("/")
         self.max_depth = max_depth
-        self.max_urls = max_urls
+        self.max_pages = max_pages
 
         parsed = urlparse(start_url)
         self.allowed_domain = allowed_domain or parsed.netloc
@@ -66,7 +66,7 @@ class URLFrontier:
             if normalized in self._visited:
                 return False
 
-            if len(self._visited) + len(self._queue) >= self.max_urls:
+            if len(self._visited) + len(self._queue) >= self.max_pages:
                 return False
 
             if depth > self.max_depth:

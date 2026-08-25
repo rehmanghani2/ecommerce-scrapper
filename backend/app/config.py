@@ -36,12 +36,9 @@ class Settings(BaseSettings):
     DATABASE_MAX_OVERFLOW: int = 10
     
     # Redis Settings
-    REDIS_HOST: str = Field(default="redis://localhost:6379/0")
-#     REDIS_PORT: str = Field(default="6379")
-#     REDIS_DB: str = Field(
-#        default="sqlite+aiosqlite:///./ecommerce_scraper.db",
-#        env="DATABASE_URL"
-#    )
+    REDIS_HOST: str = Field(default="localhost")
+    REDIS_PORT: int = Field(default=6379)
+    REDIS_DB: int = Field(default=0)
     REDIS_URL: str = Field(default="redis://localhost:6379/0")
     CELERY_BROKER_URL: str = Field(default="redis://localhost:6379/1")
     CELERY_RESULT_BACKEND: str = Field(default="redis://localhost:6379/2")
@@ -62,6 +59,7 @@ class Settings(BaseSettings):
     # Proxy Settings
     USE_PROXY: bool = False
     PROXY_LIST: Optional[str] = None
+    SCRAPER_PROXY: Optional[str] = Field(default=None)
     
     # Browser Settings
     HEADLESS: bool = True
@@ -82,6 +80,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"
 
 
 @lru_cache()

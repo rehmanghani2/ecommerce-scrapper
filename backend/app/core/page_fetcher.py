@@ -62,7 +62,9 @@ class PageFetcher:
         self.page = page
         self.timeout_ms = timeout_ms
         self.wait_until = wait_until
-        self.extra_headers = extra_headers or {}
+        self.extra_headers = extra_headers or {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
 
     async def fetch(self, url: str) -> PageFetchResult:
         """

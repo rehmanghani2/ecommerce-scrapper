@@ -55,12 +55,27 @@ async def list_jobs(
     # Execute query
     result = await db.execute(query)
     jobs = result.scalars().all()
+
+    # Sync total_products from products table for consistency
+    from app.models.product import Product
+    job_responses = []
+    need_commit = False
+    for job in jobs:
+        count_q = select(func.count(Product.id)).where(Product.job_id == job.id)
+        count_res = await db.execute(count_q)
+        real_total = count_res.scalar() or 0
+        if job.total_products != real_total:
+            job.total_products = real_total
+            need_commit = True
+        job_responses.append(JobResponse(**job.to_dict()))
     
-    # Calculate pages
-    pages = (total + page_size - 1) // page_size
-    
+    if need_commit:
+        await db.commit()
+
+    pages = (total + page_size - 1) // page_size if page_size > 0 else 1
+
     return JobListResponse(
-        jobs=[JobResponse(**job.to_dict()) for job in jobs],
+        jobs=job_responses,
         total=total,
         page=page,
         page_size=page_size,
@@ -122,6 +137,17 @@ async def get_job(job_id: str, db: AsyncSession = Depends(get_db)):
     
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+        
+    # Dynamically update total_products from the products table to ensure consistency
+    from app.models.product import Product
+    from sqlalchemy import func
+    count_query = select(func.count(Product.id)).where(Product.job_id == job.id)
+    count_result = await db.execute(count_query)
+    real_total = count_result.scalar() or 0
+    
+    if job.total_products != real_total:
+        job.total_products = real_total
+        await db.commit()
     
     return JobResponse(**job.to_dict())
 
@@ -287,3 +313,82 @@ async def retry_job(
     # TODO: Queue job for retry
     
     return {"success": True, "message": "Job queued for retry", "status": "pending"}
+
+
+@router.get("/{job_id}/logs")
+async def get_job_logs(
+    job_id: str,
+    limit: int = Query(500, ge=1, le=2000),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get scraping logs for a job.
+    Returns timestamped log entries written during the crawl.
+    """
+    query = select(Job).where(Job.job_id == job_id)
+    result = await db.execute(query)
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    logs = list(job.logs or [])
+
+    # Apply limit (most recent first if over limit)
+    if len(logs) > limit:
+        logs = logs[-limit:]
+
+    return {
+        "job_id": job_id,
+        "total": len(logs),
+        "logs": logs,
+    }
+
+
+@router.get("/{job_id}/products")
+async def get_job_products(
+    job_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all products scraped by a specific job.
+    """
+    from sqlalchemy import select, func
+    from app.models.product import Product
+
+    # Find the job record first
+    job_query = select(Job).where(Job.job_id == job_id)
+    job_result = await db.execute(job_query)
+    job = job_result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Count products
+    count_query = select(func.count(Product.id)).where(Product.job_id == job.id)
+    count_result = await db.execute(count_query)
+    total = count_result.scalar() or 0
+
+    # Paginate
+    from sqlalchemy.orm import selectinload
+    offset = (page - 1) * page_size
+    products_query = (
+        select(Product)
+        .options(selectinload(Product.images), selectinload(Product.variants))
+        .where(Product.job_id == job.id)
+        .offset(offset)
+        .limit(page_size)
+    )
+    products_result = await db.execute(products_query)
+    products = products_result.scalars().all()
+
+    return {
+        "job_id": job_id,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "pages": (total + page_size - 1) // page_size,
+        "products": [p.to_dict() for p in products],
+    }

@@ -12,14 +12,30 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        if (authService.isAuthenticated()) {
-          // Try to get current user
-          const currentUser = await authService.getCurrentUser()
-          setUser(currentUser)
-          setIsAuthenticated(true)
+        const token = authService.getToken ? authService.getToken() : localStorage.getItem('auth_token')
+        if (!token) {
+          // No token at all — skip network call
+          setIsLoading(false)
+          return
         }
+        // Quick sanity check: JWT has 3 dot-separated parts
+        if (token.split('.').length !== 3) {
+          authService.logout()
+          setIsLoading(false)
+          return
+        }
+        // Race the network call against a 5-second timeout
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Auth check timed out')), 5000)
+        )
+        const currentUser = await Promise.race([
+          authService.getCurrentUser(),
+          timeoutPromise,
+        ])
+        setUser(currentUser)
+        setIsAuthenticated(true)
       } catch (error) {
-        // Token might be expired
+        // Token expired, invalid, or backend unreachable
         authService.logout()
         setUser(null)
         setIsAuthenticated(false)
@@ -36,7 +52,6 @@ export function AuthProvider({ children }) {
     try {
       const { user: loggedInUser } = await authService.login(username, password)
       console.log("LoggedInUser ", loggedInUser)
-      print(loggedInUser)
       setUser(loggedInUser)
       setIsAuthenticated(true)
       return loggedInUser
