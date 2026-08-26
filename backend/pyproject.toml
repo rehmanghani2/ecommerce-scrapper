@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ecommerce-scraper-backend"
+version = "1.0.0"
+description = "E-Commerce Scraper Platform Backend"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "python-multipart>=0.0.6",
+    "playwright>=1.41.0",
+    "aiohttp>=3.9.1",
+    "httpx>=0.26.0",
+    "sqlalchemy>=2.0.25",
+    "asyncpg>=0.29.0",
+    "psycopg2-binary>=2.9.9",
+    "beautifulsoup4>=4.12.3",
+    "lxml>=5.1.0",
+    "pandas>=2.1.4",
+    "openpyxl>=3.1.2",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.5.3",
+    "pydantic-settings>=2.1.0",
+    "tenacity>=8.2.3",
+    "fake-useragent>=1.4.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "xlsxwriter>=3.1.9",
+    "loguru>=0.7.2",
+    "structlog>=24.1.0"
+]
