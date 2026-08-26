@@ -4,7 +4,7 @@ version = "1.0.0"
 description = "FastAPI E-Commerce Scraper Platform Backend"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.109.0",
+    "fastapi[standard]>=0.109.0",
     "uvicorn[standard]>=0.27.0",
     "python-multipart>=0.0.6",
     "playwright>=1.41.0",
