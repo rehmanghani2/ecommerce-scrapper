@@ -4,8 +4,8 @@ Handles all environment variables and settings.
 """
 
 from pydantic_settings import BaseSettings
-from pydantic import Field
-from typing import Optional, List
+from pydantic import Field, field_validator
+from typing import Optional, List, Union
 from functools import lru_cache
 
 
@@ -75,6 +75,20 @@ class Settings(BaseSettings):
     
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, v: Union[str, List]) -> List[str]:
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("["):
+                import json
+                return json.loads(v)
+            # comma-separated: "http://a.com,http://b.com"
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
     
     class Config:
         env_file = ".env"
