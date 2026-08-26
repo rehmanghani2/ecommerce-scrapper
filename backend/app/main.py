@@ -39,10 +39,13 @@ async def lifespan(app: FastAPI):
     
     # Install Playwright browsers
     try:
-        from playwright.async_api import async_playwright
+        import sys
+        import subprocess
+        logger.info("Installing Playwright chromium browser binary...")
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
         logger.info("Playwright ready")
     except Exception as e:
-        logger.warning(f"Playwright initialization warning: {e}")
+        logger.warning(f"Playwright auto-installation warning: {e}")
     
     yield
     

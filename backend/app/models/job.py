@@ -112,9 +112,21 @@ class Job(Base):
     def duration(self) -> Optional[float]:
         """Calculate job duration in seconds."""
         if self.started_at and self.completed_at:
-            return (self.completed_at - self.started_at).total_seconds()
+            start = self.started_at
+            end = self.completed_at
+            if start.tzinfo is not None and end.tzinfo is None:
+                start = start.replace(tzinfo=None)
+            elif start.tzinfo is None and end.tzinfo is not None:
+                end = end.replace(tzinfo=None)
+            return (end - start).total_seconds()
         elif self.started_at:
-            return (datetime.utcnow() - self.started_at).total_seconds()
+            start = self.started_at
+            if start.tzinfo is not None:
+                from datetime import timezone
+                now = datetime.now(timezone.utc)
+            else:
+                now = datetime.utcnow()
+            return (now - start).total_seconds()
         return None
     
     @property
