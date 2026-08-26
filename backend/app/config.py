@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     # Accepts comma-separated: "http://a.com,http://b.com"
     # or JSON array: '["http://a.com"]'
     # or wildcard: "*"
-    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+    ALLOWED_ORIGINS: str = "https://ecommerce-scrapper-sigma.vercel.app,http://localhost:3000,http://localhost:5173"
     
     class Config:
         env_file = ".env"

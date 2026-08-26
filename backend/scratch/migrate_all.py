@@ -3,7 +3,6 @@ import os
 import sys
 import sqlite3
 import json
-import re
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -13,13 +12,7 @@ from app.models.product import Product, ProductImage
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import select
-
-def clean_num(val):
-    if val is None or val == '': return None
-    if isinstance(val, (int, float)): return float(val)
-    cleaned = re.sub(r'[^\d.]', '', str(val))
-    try: return float(cleaned) if cleaned else None
-    except Exception: return None
+from urllib.parse import urlparse
 
 def get_sqlite():
     db_path = os.path.join(os.path.dirname(__file__), "..", "ecommerce_scraper.db")
@@ -73,7 +66,7 @@ async def run_migration():
                 await db.rollback()
                 print(f"Skipping job {rd.get('job_id')}: {e}")
 
-        print(f"Successfully migrated {len(job_map)} Jobs to Neon DB")
+        print(f"Migrated {len(job_map)} Jobs to Neon DB")
 
         # 2. Migrate Products
         cursor.execute("SELECT * FROM products")
@@ -93,6 +86,12 @@ async def run_migration():
                     cats = json.loads(rd['categories']) if rd.get('categories') and isinstance(rd['categories'], str) else []
                     
                     fk_job_id = job_map.get(rd.get('job_id'))
+                    
+                    url_val = rd.get('url') or "http://example.com"
+                    domain_val = rd.get('source_domain') or rd.get('domain')
+                    if not domain_val:
+                        try: domain_val = urlparse(url_val).netloc
+                        except Exception: domain_val = "example.com"
 
                     obj = Product(
                         product_id=p_id,
@@ -104,16 +103,17 @@ async def run_migration():
                         title=rd.get('title'),
                         description=rd.get('description'),
                         short_description=rd.get('short_description'),
-                        price=clean_num(rd.get('price')),
-                        original_price=clean_num(rd.get('original_price')),
-                        sale_price=clean_num(rd.get('sale_price')),
+                        price=float(rd.get('price')) if rd.get('price') is not None else None,
+                        original_price=float(rd.get('original_price')) if rd.get('original_price') is not None else None,
+                        sale_price=float(rd.get('sale_price')) if rd.get('sale_price') is not None else None,
                         currency=rd.get('currency') or "USD",
                         price_text=rd.get('price_text'),
-                        discount_percentage=clean_num(rd.get('discount_percentage')),
+                        discount_percentage=float(rd.get('discount_percentage')) if rd.get('discount_percentage') is not None else None,
                         in_stock=bool(rd.get('in_stock', True)),
                         stock_quantity=rd.get('stock_quantity'),
                         stock_status=rd.get('stock_status'),
-                        url=rd.get('url') or "http://example.com",
+                        url=url_val,
+                        source_domain=domain_val,
                         image_url=rd.get('image_url'),
                         thumbnail_url=rd.get('thumbnail_url'),
                         category=rd.get('category'),
@@ -123,7 +123,7 @@ async def run_migration():
                         brand=rd.get('brand'),
                         manufacturer=rd.get('manufacturer'),
                         vendor=rd.get('vendor'),
-                        rating=clean_num(rd.get('rating')),
+                        rating=float(rd.get('rating')) if rd.get('rating') is not None else None,
                         review_count=rd.get('review_count') or 0,
                         raw_data=raw
                     )
@@ -131,7 +131,7 @@ async def run_migration():
                     await db.commit()
                 prod_map[rd['id']] = obj.id
                 prod_count += 1
-                if prod_count % 100 == 0:
+                if prod_count % 50 == 0:
                     print(f"Migrated {prod_count}/{len(prod_rows)} products...")
             except Exception as e:
                 await db.rollback()
