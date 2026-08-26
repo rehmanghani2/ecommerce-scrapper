@@ -1,11 +1,7 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "ecommerce-scraper-backend"
 version = "1.0.0"
-description = "E-Commerce Scraper Platform Backend"
+description = "FastAPI E-Commerce Scraper Platform Backend"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -18,6 +14,8 @@ dependencies = [
     "sqlalchemy>=2.0.25",
     "asyncpg>=0.29.0",
     "psycopg2-binary>=2.9.9",
+    "celery[redis]>=5.3.4",
+    "redis>=4.6.0",
     "beautifulsoup4>=4.12.3",
     "lxml>=5.1.0",
     "pandas>=2.1.4",
@@ -33,3 +31,10 @@ dependencies = [
     "loguru>=0.7.2",
     "structlog>=24.1.0"
 ]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.fastapicloud]
+start = "uvicorn app.main:app --host 0.0.0.0 --port 8000"
