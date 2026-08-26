@@ -76,10 +76,20 @@ app = FastAPI(
 )
 
 
+# Parse ALLOWED_ORIGINS from settings string
+def _parse_origins(raw: str) -> list:
+    raw = raw.strip()
+    if raw == "*":
+        return ["*"]
+    if raw.startswith("["):
+        import json
+        return json.loads(raw)
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origins=_parse_origins(settings.ALLOWED_ORIGINS),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
