@@ -5,12 +5,19 @@ User model for authentication and authorization.
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from passlib.context import CryptContext
+import bcrypt
 
 from .database import Base
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def _hash_password(password: str) -> str:
+    """Hash a password using bcrypt."""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def _verify_password(password: str, hashed: str) -> bool:
+    """Verify a password against a bcrypt hash."""
+    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
 class User(Base):
@@ -50,11 +57,11 @@ class User(Base):
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash a password."""
-        return pwd_context.hash(password)
+        return _hash_password(password)
     
     def verify_password(self, password: str) -> bool:
         """Verify a password against the hash."""
-        return pwd_context.verify(password, self.hashed_password)
+        return _verify_password(password, self.hashed_password)
     
     def set_password(self, password: str):
         """Set a new password."""
