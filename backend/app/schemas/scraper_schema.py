@@ -13,6 +13,7 @@ class ScraperType(str, Enum):
     GENERIC = "generic"
     SHOPIFY = "shopify"
     WOOCOMMERCE = "woocommerce"
+    BIGCOMMERCE = "bigcommerce"
     MAGENTO = "magento"
     CUSTOM = "custom"
 

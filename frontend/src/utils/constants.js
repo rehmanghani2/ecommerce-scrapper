@@ -44,6 +44,7 @@ export const PLATFORMS = [
   { value: 'auto', label: 'Auto Detect' },
   { value: 'shopify', label: 'Shopify' },
   { value: 'woocommerce', label: 'WooCommerce' },
+  { value: 'bigcommerce', label: 'BigCommerce' },
   { value: 'magento', label: 'Magento' },
   { value: 'generic', label: 'Generic' },
 ]

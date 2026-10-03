@@ -31,6 +31,10 @@ class PageData:
     has_next_page: bool
     next_page_url: Optional[str] = None
 
+# Compatibility aliases
+ProductData = Dict[str, Any]
+ScraperResult = ScrapingResult
+
 class BaseScraper(ABC):
     """Base class for all e-commerce scrapers"""
     
@@ -86,7 +90,14 @@ class BaseScraper(ABC):
         self.config = config
         self.selectors = selectors
         self.progress_callback = progress_callback
-        self.rate_limiter = AdaptiveRateLimiter(base_delay=config.delay_range[0])
+        
+        base_delay = 1.0
+        if hasattr(config, "delay_range") and config.delay_range:
+            base_delay = config.delay_range[0]
+        elif hasattr(config, "request_delay") and config.request_delay:
+            base_delay = config.request_delay / 1000.0 if config.request_delay > 10 else float(config.request_delay)
+        rate = 1.0 / base_delay if base_delay > 0 else 2.0
+        self.rate_limiter = AdaptiveRateLimiter(initial_rate=rate)
         self.data_cleaner = DataCleaner()
         self._current_page = 0
         self._total_products = 0

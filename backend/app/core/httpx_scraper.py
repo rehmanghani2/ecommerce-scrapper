@@ -80,6 +80,22 @@ PLATFORM_SELECTORS: Dict[str, Dict] = {
         "image": "img",
         "link": "a",
     },
+    "bigcommerce": {
+        "platform": "BigCommerce",
+        "product_container": "article.card, .productGrid .product, .card[data-test='card']",
+        "name": ".card-title a, h3.card-title a, h4.card-title a, .card-title",
+        "price": ".price--withoutTax, .price--withTax, .price--main, .price-section .price, .price",
+        "image": ".card-img-container img, .card-image, img.card-image, img",
+        "link": ".card-title a, .card-figure__link, a",
+    },
+    "magento": {
+        "platform": "Magento",
+        "product_container": ".item.product.product-item, li.product-item, .product-item-info, .product-item",
+        "name": "strong.product-item-name a, a.product-item-link, .product-item-name a, .product-name a",
+        "price": "[data-price-type='finalPrice'] .price, .special-price .price, .price-box .price, .price",
+        "image": "img.product-image-photo, img.photo.image, .product-image-container img, img",
+        "link": "a.product-item-link, a.product.photo, strong.product-item-name a, a",
+    },
     "amazon": {
         "platform": "Amazon",
         "product_container": "div[data-component-type='s-search-result']",
