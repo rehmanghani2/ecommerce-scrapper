@@ -46,6 +46,8 @@ export const PLATFORMS = [
   { value: 'woocommerce', label: 'WooCommerce' },
   { value: 'bigcommerce', label: 'BigCommerce' },
   { value: 'magento', label: 'Magento' },
+  { value: 'squarespace', label: 'Squarespace' },
+  { value: 'wix', label: 'Wix' },
   { value: 'generic', label: 'Generic' },
 ]
 

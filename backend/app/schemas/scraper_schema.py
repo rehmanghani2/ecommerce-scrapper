@@ -15,6 +15,8 @@ class ScraperType(str, Enum):
     WOOCOMMERCE = "woocommerce"
     BIGCOMMERCE = "bigcommerce"
     MAGENTO = "magento"
+    SQUARESPACE = "squarespace"
+    WIX = "wix"
     CUSTOM = "custom"
 
 

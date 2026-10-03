@@ -96,6 +96,22 @@ PLATFORM_SELECTORS: Dict[str, Dict] = {
         "image": "img.product-image-photo, img.photo.image, .product-image-container img, img",
         "link": "a.product-item-link, a.product.photo, strong.product-item-name a, a",
     },
+    "squarespace": {
+        "platform": "Squarespace",
+        "product_container": ".grid-item, .ProductList-item, article.ProductItem, .product-item",
+        "name": ".grid-title, .ProductList-title, h1.ProductItem-details-title, .product-title, .title",
+        "price": ".product-price, .sqs-money-native, .ProductList-price, .price",
+        "image": "img.grid-item-image, .ProductList-image img, img[data-src], img",
+        "link": "a.grid-item-link, .ProductList-item a, a",
+    },
+    "wix": {
+        "platform": "Wix",
+        "product_container": "[data-hook='product-item-root'], li[data-hook='product-list-item'], div[data-hook='product-item'], .product-item",
+        "name": "[data-hook='product-item-name'], h3[data-hook='product-item-name'], [data-hook='product-title'], .product-title",
+        "price": "[data-hook='product-item-price-to-pay'], span[data-hook='product-item-price'], [data-hook='formatted-primary-price'], .price",
+        "image": "[data-hook='product-item-images'] img, img[data-hook='product-item-image'], img",
+        "link": "a[data-hook='product-item-container'], a[data-hook='item-link'], a",
+    },
     "amazon": {
         "platform": "Amazon",
         "product_container": "div[data-component-type='s-search-result']",

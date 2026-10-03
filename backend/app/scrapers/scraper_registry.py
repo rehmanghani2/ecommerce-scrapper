@@ -112,6 +112,8 @@ class ScraperRegistry:
                 'shopify': ['myshopify.com'],
                 'bigcommerce': ['mybigcommerce.com', 'bigcommerce.'],
                 'magento': ['magento.'],
+                'squarespace': ['squarespace.com'],
+                'wix': ['wixsite.com', 'wix.com'],
                 'etsy': ['etsy.com'],
                 'walmart': ['walmart.'],
                 'aliexpress': ['aliexpress.'],
@@ -196,6 +198,8 @@ def _register_all_scrapers():
     from .woocommerce_scraper import WooCommerceScraper
     from .magento_scraper import MagentoScraper
     from .bigcommerce_scraper import BigCommerceScraper
+    from .squarespace_scraper import SquarespaceScraper
+    from .wix_scraper import WixScraper
     from .generic_scraper import GenericScraper
     
     ScraperRegistry.register('amazon', AmazonScraper)
@@ -204,6 +208,8 @@ def _register_all_scrapers():
     ScraperRegistry.register('woocommerce', WooCommerceScraper)
     ScraperRegistry.register('magento', MagentoScraper)
     ScraperRegistry.register('bigcommerce', BigCommerceScraper)
+    ScraperRegistry.register('squarespace', SquarespaceScraper)
+    ScraperRegistry.register('wix', WixScraper)
     ScraperRegistry.register('generic', GenericScraper)
 
 
