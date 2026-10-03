@@ -61,6 +61,13 @@ class JobEventNotifier:
         Publish message safely.
         Never raises exception upward.
         """
+        # Publish locally to in-memory pub-sub first
+        try:
+            from app.services.in_memory_pubsub import in_memory_pubsub
+            await in_memory_pubsub.publish(channel, message)
+        except Exception as e:
+            logger.warning(f"In-memory publish failed: {e}")
+
         if not self._connected:
             await self.connect()
 

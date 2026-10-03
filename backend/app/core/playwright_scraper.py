@@ -246,6 +246,37 @@ class PlaywrightScraper:
         pages_count = 0
         if isinstance(result, dict) and "error" in result:
             await self._log(f"Playwright crashed: {result['error']}", "error")
+            await self._log("Falling back to HTTPX/BeautifulSoup Scraper...", "warning")
+            from app.core.httpx_scraper import HttpxScraper
+            
+            httpx_proxy_str = None
+            if self.proxy:
+                if isinstance(self.proxy, dict):
+                    httpx_proxy_str = self.proxy.get("server")
+                else:
+                    httpx_proxy_str = str(self.proxy)
+
+            httpx_scraper = HttpxScraper(
+                job_id=self.job_id,
+                start_url=self.start_url,
+                max_pages=self.max_pages,
+                max_products=self.max_products,
+                max_depth=self.max_depth,
+                request_delay=self.request_delay,
+                proxy=httpx_proxy_str,
+                on_log=self.on_log,
+                on_product_batch=self.on_product_batch,
+                on_page_done=self.on_page_done,
+            )
+            # Sync starting point and configuration state
+            httpx_scraper._visited = self._visited
+            httpx_scraper._queue = self._queue
+            httpx_scraper._total_products = self._total_products
+            
+            await httpx_scraper.run()
+            
+            self._total_products = httpx_scraper._total_products
+            return
         else:
             pages_count = result or 0
 

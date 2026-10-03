@@ -11,11 +11,10 @@ import logging
 
 from app.services.notification_service import websocket_manager
 from app.config import settings
+from app.services.in_memory_pubsub import in_memory_pubsub
 
 import redis.asyncio as redis
-
 from app.services.redis_subscriber import RedisSubscriber
-
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +46,14 @@ async def websocket_endpoint(
     # Register connection
     await websocket_manager.connect(user_id, websocket)
     
+    redis_client = None
+    pubsub = None
+    redis_task = None
+    
     try:
         # Subscribe to Redis channel for this user
-        
-        
         redis_client = redis.from_url(settings.REDIS_URL)
-        print("redis_client", redis_client)
         pubsub = redis_client.pubsub()
-        print("pubsub", pubsub)
         await pubsub.subscribe(f"notifications:{user_id}")
         
         # Start listening for messages
@@ -69,7 +68,15 @@ async def websocket_endpoint(
         
         # Start Redis listener in background
         redis_task = asyncio.create_task(listen_redis())
+        logger.info(f"User WebSocket {user_id} connected with Redis pub-sub")
         
+    except Exception as e:
+        logger.warning(f"Redis is not available for websocket {user_id}: {e}. Falling back to in-memory mode.")
+        redis_task = None
+        pubsub = None
+        redis_client = None
+
+    try:
         # Handle incoming messages from client
         while True:
             try:
@@ -81,13 +88,13 @@ async def websocket_endpoint(
                 if message_type == "ping":
                     await websocket.send_json({"type": "pong"})
                     
-                elif message_type == "subscribe":
+                elif message_type == "subscribe" and pubsub:
                     # Subscribe to additional channels
                     channels = data.get("channels", [])
                     for channel in channels:
                         await pubsub.subscribe(channel)
                         
-                elif message_type == "unsubscribe":
+                elif message_type == "unsubscribe" and pubsub:
                     channels = data.get("channels", [])
                     for channel in channels:
                         await pubsub.unsubscribe(channel)
@@ -99,21 +106,19 @@ async def websocket_endpoint(
                 break
         
         # Cleanup
-        redis_task.cancel()
-        await pubsub.unsubscribe()
-        await redis_client.close()
-        
+        if redis_task:
+            redis_task.cancel()
+        if pubsub:
+            await pubsub.unsubscribe()
+        if redis_client:
+            await redis_client.close()
+            
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"WebSocket execution error: {e}")
         
     finally:
         await websocket_manager.disconnect(user_id, websocket)
 
-try:
-    # import redis.asyncio as redis
-    REDIS_AVAILABLE = True
-except ImportError:
-    REDIS_AVAILABLE = False
 
 @router.websocket("/ws/jobs/{job_id}")
 async def job_updates_websocket(
@@ -132,9 +137,21 @@ async def job_updates_websocket(
     
     await websocket.accept()
     
+    # Define callback to send JSON data to websocket from in-memory pub-sub
+    async def on_event(data: dict):
+        try:
+            await websocket.send_json(data)
+        except Exception:
+            pass
+
+    # Subscribe to in-memory pub-sub
+    await in_memory_pubsub.subscribe(f"job:{job_id}", on_event)
+    
+    redis_client = None
+    pubsub = None
+    redis_task = None
+    
     try:
-        # import redis.asyncio as redis
-        
         redis_client = redis.from_url(settings.REDIS_URL)
         pubsub = redis_client.pubsub()
         await pubsub.subscribe(f"job:{job_id}")
@@ -149,47 +166,80 @@ async def job_updates_websocket(
                         pass
         
         redis_task = asyncio.create_task(listen_redis())
+        logger.info(f"Job WebSocket {job_id} connected with Redis pub-sub")
         
+    except Exception as e:
+        logger.warning(f"Redis not available for job WebSocket {job_id}: {e}. Running in memory-only mode.")
+
+    try:
         while True:
             try:
                 data = await websocket.receive_json()
-                
                 if data.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
-                    
             except WebSocketDisconnect:
                 break
             except Exception:
                 break
+                
+    finally:
+        # Cleanup local subscription
+        await in_memory_pubsub.unsubscribe(f"job:{job_id}", on_event)
         
-        redis_task.cancel()
-        await pubsub.unsubscribe()
-        await redis_client.close()
-        
-    except Exception as e:
-        logger.error(f"Job WebSocket error: {e}")
- 
- 
-        
+        # Cleanup Redis subscription
+        if redis_task:
+            redis_task.cancel()
+        if pubsub:
+            await pubsub.unsubscribe()
+        if redis_client:
+            await redis_client.close()
+
+
 # NEW FROM 
 @router.websocket("/ws/{job_id}")
 async def job_ws(websocket: WebSocket, job_id: str):
     await websocket.accept()
 
-    subscriber = RedisSubscriber()
-    await subscriber.connect()
-
     async def send_to_client(message: dict):
-        await websocket.send_json(message)
+        try:
+            await websocket.send_json(message)
+        except Exception:
+            pass
+
+    # Subscribe to in-memory pub-sub
+    await in_memory_pubsub.subscribe(f"job:{job_id}", send_to_client)
+
+    subscriber = None
+    subscriber_task = None
+    
+    try:
+        subscriber = RedisSubscriber()
+        await subscriber.connect()
+        
+        async def listen_redis():
+            await subscriber.subscribe(
+                channel=f"job:{job_id}",
+                message_handler=send_to_client
+            )
+            
+        subscriber_task = asyncio.create_task(listen_redis())
+        logger.info(f"Job ws {job_id} connected with RedisSubscriber")
+        
+    except Exception as e:
+        logger.warning(f"RedisSubscriber failed for job_ws {job_id}: {e}. Running in memory-only mode.")
 
     try:
-        await subscriber.subscribe(
-            channel=f"job:{job_id}",
-            message_handler=send_to_client
-        )
-
+        while True:
+            # Just keep connection alive and wait for client to disconnect
+            await websocket.receive_text()
     except WebSocketDisconnect:
         pass
-
     finally:
-        await subscriber.close()
+        await in_memory_pubsub.unsubscribe(f"job:{job_id}", send_to_client)
+        if subscriber_task:
+            subscriber_task.cancel()
+        if subscriber:
+            try:
+                await subscriber.close()
+            except Exception:
+                pass

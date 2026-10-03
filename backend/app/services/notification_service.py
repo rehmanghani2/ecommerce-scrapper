@@ -104,25 +104,24 @@ class NotificationService:
     
     async def _send_websocket(self, user_id: int, notification: Dict[str, Any]) -> None:
         """Send notification via WebSocket."""
-        # This would integrate with a WebSocket manager
-        # For now, we'll use Redis pub/sub for real-time updates
-        
+        # Try local WebSocket connections first
+        try:
+            await websocket_manager.send_to_user(user_id, notification)
+        except Exception as e:
+            logger.debug(f"Direct WebSocket send failed or no active connections: {e}")
+
+        # Also publish to Redis for other cluster instances (re-entrant, safe)
         import redis.asyncio as redis
-        
         try:
             redis_client = redis.from_url(settings.REDIS_URL)
-            
             channel = f"notifications:{user_id}"
             message = json.dumps(notification)
-            
             await redis_client.publish(channel, message)
             await redis_client.close()
-            
             logger.debug(f"WebSocket notification sent to user {user_id}")
-            
         except Exception as e:
-            logger.error(f"WebSocket notification failed: {e}")
-            raise
+            logger.warning(f"WebSocket Redis publish failed: {e}")
+
     
     async def _send_email(self, user_id: int, notification: Dict[str, Any]) -> None:
         """Send notification via email."""
@@ -242,8 +241,8 @@ class NotificationService:
             await redis_client.close()
             
         except Exception as e:
-            logger.error(f"Failed to save in-app notification: {e}")
-            raise
+            logger.warning(f"Failed to save in-app notification to Redis: {e}")
+
     
     async def get_user_notifications(
         self,
