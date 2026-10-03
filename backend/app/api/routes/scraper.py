@@ -422,9 +422,18 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                     pw_proxy = proxy_setting
                     httpx_proxy = proxy_setting.get("server")
 
+            # Platform auto-detection
+            from app.scrapers.scraper_registry import ScraperRegistry
+            detection = ScraperRegistry.detect_platform_detailed(url, fetch_if_needed=False)
+            detected_platform = detection.get("platform", "generic")
+            confidence = int(detection.get("confidence", 0.0) * 100)
+            method = detection.get("method", "domain")
+
+            await write_log(f"Auto-detected platform: {detected_platform.upper()} ({confidence}% confidence via {method})", "info")
+
             use_pw = bool(config and getattr(config, 'javascript_rendering', False))
             domain_lower = url.lower()
-            if any(m in domain_lower for m in ("amazon.", "ebay.", "walmart.", "etsy.")):
+            if any(m in domain_lower for m in ("amazon.", "ebay.", "walmart.", "etsy.", "wix.")) or detected_platform in ("amazon", "ebay", "walmart", "etsy", "wix"):
                 use_pw = True
 
             if use_pw:

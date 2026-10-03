@@ -85,11 +85,11 @@ class PatternDetector:
             "name": "eBay",
             "indicators": ["ebay.com", "ebay.co.uk", "ebay.de"],
             "selectors": {
-                "product_card": ".s-item, li.s-item",
-                "product_name": ".s-item__title",
-                "product_price": ".s-item__price",
+                "product_card": ".s-card, .s-item, li.s-item",
+                "product_name": "[role='heading'], .s-card__title, .s-item__title, h3",
+                "product_price": ".s-card__price, .s-item__price, span[class*='price']",
                 "product_image": "img::attr(src)",
-                "product_link": "a.s-item__link::attr(href)"
+                "product_link": "a::attr(href)"
             }
         },
         "daraz": {
