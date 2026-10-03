@@ -200,6 +200,8 @@ def _register_all_scrapers():
     from .bigcommerce_scraper import BigCommerceScraper
     from .squarespace_scraper import SquarespaceScraper
     from .wix_scraper import WixScraper
+    from .etsy_scraper import EtsyScraper
+    from .walmart_scraper import WalmartScraper
     from .generic_scraper import GenericScraper
     
     ScraperRegistry.register('amazon', AmazonScraper)
@@ -210,6 +212,8 @@ def _register_all_scrapers():
     ScraperRegistry.register('bigcommerce', BigCommerceScraper)
     ScraperRegistry.register('squarespace', SquarespaceScraper)
     ScraperRegistry.register('wix', WixScraper)
+    ScraperRegistry.register('etsy', EtsyScraper)
+    ScraperRegistry.register('walmart', WalmartScraper)
     ScraperRegistry.register('generic', GenericScraper)
 
 

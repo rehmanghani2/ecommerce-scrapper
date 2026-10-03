@@ -4,6 +4,8 @@ from app.scrapers.bigcommerce_scraper import BigCommerceScraper
 from app.scrapers.magento_scraper import MagentoScraper
 from app.scrapers.squarespace_scraper import SquarespaceScraper
 from app.scrapers.wix_scraper import WixScraper
+from app.scrapers.etsy_scraper import EtsyScraper
+from app.scrapers.walmart_scraper import WalmartScraper
 from app.schemas.scraper_schema import ScraperConfig
 from app.core.httpx_scraper import PLATFORM_SELECTORS
 
@@ -15,6 +17,8 @@ def test_registry_includes_platforms():
     assert "woocommerce" in platforms
     assert "squarespace" in platforms
     assert "wix" in platforms
+    assert "etsy" in platforms
+    assert "walmart" in platforms
     assert "generic" in platforms
 
 def test_platform_detection():
@@ -23,6 +27,8 @@ def test_platform_detection():
     assert detect_platform("https://test.myshopify.com") == "shopify"
     assert detect_platform("https://studio.squarespace.com/shop") == "squarespace"
     assert detect_platform("https://mybrand.wixsite.com/store") == "wix"
+    assert detect_platform("https://www.etsy.com/c/vintage") == "etsy"
+    assert detect_platform("https://www.walmart.com/browse/electronics") == "walmart"
 
 def test_scraper_instantiation():
     config = ScraperConfig(start_url="https://store.mybigcommerce.com")
@@ -42,10 +48,20 @@ def test_scraper_instantiation():
     assert isinstance(wix_scraper, WixScraper)
     assert wix_scraper.PLATFORM_NAME == "wix"
 
+    etsy_scraper = get_scraper("etsy", config)
+    assert isinstance(etsy_scraper, EtsyScraper)
+    assert etsy_scraper.PLATFORM_NAME == "etsy"
+
+    walmart_scraper = get_scraper("walmart", config)
+    assert isinstance(walmart_scraper, WalmartScraper)
+    assert walmart_scraper.PLATFORM_NAME == "walmart"
+
 def test_httpx_selectors_configured():
     assert "bigcommerce" in PLATFORM_SELECTORS
     assert "magento" in PLATFORM_SELECTORS
     assert "squarespace" in PLATFORM_SELECTORS
     assert "wix" in PLATFORM_SELECTORS
-    assert "product_container" in PLATFORM_SELECTORS["squarespace"]
-    assert "product_container" in PLATFORM_SELECTORS["wix"]
+    assert "etsy" in PLATFORM_SELECTORS
+    assert "walmart" in PLATFORM_SELECTORS
+    assert "product_container" in PLATFORM_SELECTORS["etsy"]
+    assert "product_container" in PLATFORM_SELECTORS["walmart"]

@@ -48,6 +48,8 @@ export const PLATFORMS = [
   { value: 'magento', label: 'Magento' },
   { value: 'squarespace', label: 'Squarespace' },
   { value: 'wix', label: 'Wix' },
+  { value: 'etsy', label: 'Etsy' },
+  { value: 'walmart', label: 'Walmart' },
   { value: 'generic', label: 'Generic' },
 ]
 

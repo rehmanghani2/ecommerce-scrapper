@@ -128,6 +128,22 @@ PLATFORM_SELECTORS: Dict[str, Dict] = {
         "image": ".s-item__image-img, img",
         "link": "a.s-item__link",
     },
+    "etsy": {
+        "platform": "Etsy",
+        "product_container": "div.v2-listing-card, li.wt-list-unstyled .v2-listing-card, div[data-search-results-listing-card]",
+        "name": "h3.v2-listing-card__title, h3.wt-text-caption, a.listing-link h3, h3",
+        "price": ".currency-value, span.currency-value, p.wt-text-title-01 .currency-value",
+        "image": "img.wt-width-full, img.v2-listing-card__img, img",
+        "link": "a.listing-link, a.v2-listing-card__link, a",
+    },
+    "walmart": {
+        "platform": "Walmart",
+        "product_container": "div[data-item-id], div[data-testid='item-stack'] > div, div[data-testid='product-card']",
+        "name": "span[data-automation-id='product-title'], span.w_iUH7, [data-testid='product-title'], h3",
+        "price": "div[data-automation-id='product-price'] .w_iDh7, div[data-automation-id='product-price'], span.w_iDh7, [data-testid='product-price'], span.f2",
+        "image": "img[data-testid='productTileImage'], img[data-automation-id='product-image'], img",
+        "link": "a[link-identifier], a[data-automation-id='product-title-link'], a[data-testid='product-link'], a",
+    },
     "daraz": {
         "platform": "Daraz",
         "product_container": "div[data-qa-locator='product-item']",
