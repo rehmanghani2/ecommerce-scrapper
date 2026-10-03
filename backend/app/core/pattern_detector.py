@@ -24,6 +24,12 @@ class PatternDetector:
         "woocommerce.com": "woocommerce",
         "magento.com": "magento",
         "bigcommerce.com": "bigcommerce",
+        "mybigcommerce.com": "bigcommerce",
+        "squarespace.com": "squarespace",
+        "wixsite.com": "wix",
+        "wix.com": "wix",
+        "etsy.com": "etsy",
+        "walmart.com": "walmart",
         "prestashop.com": "prestashop",
         "amazon": "amazon",
         "ebay": "ebay",
@@ -95,6 +101,72 @@ class PatternDetector:
                 "product_price": "span[class*='price']",
                 "product_image": "img::attr(src)",
                 "product_link": "a::attr(href)"
+            }
+        },
+        "bigcommerce": {
+            "name": "BigCommerce",
+            "indicators": ["cdn11.bigcommerce.com", "stencil-utils", "bigcommerce", "productGrid"],
+            "selectors": {
+                "product_card": "article.card, .productGrid .product",
+                "product_name": ".card-title a, .card-title",
+                "product_price": ".price--withoutTax, .price--main, .price",
+                "product_image": ".card-img-container img, img",
+                "product_link": ".card-title a, a.card-figure__link"
+            }
+        },
+        "magento": {
+            "name": "Magento",
+            "indicators": ["mage/cookies.js", "Magento_", "mage-translation", "data-mage-init"],
+            "selectors": {
+                "product_card": ".item.product.product-item, .product-item",
+                "product_name": "strong.product-item-name a, a.product-item-link",
+                "product_price": "[data-price-type='finalPrice'] .price, .special-price .price, .price",
+                "product_image": "img.product-image-photo, img",
+                "product_link": "a.product-item-link, a"
+            }
+        },
+        "squarespace": {
+            "name": "Squarespace",
+            "indicators": ["static1.squarespace.com", "Squarespace", "sqs-money-native"],
+            "selectors": {
+                "product_card": ".grid-item, .ProductList-item, article.ProductItem",
+                "product_name": ".grid-title, .ProductList-title, .product-title",
+                "product_price": ".product-price, .sqs-money-native, .price",
+                "product_image": "img.grid-item-image, .ProductList-image img, img",
+                "product_link": "a.grid-item-link, a"
+            }
+        },
+        "wix": {
+            "name": "Wix",
+            "indicators": ["static.wixstatic.com", "wix-warmup-data", "data-hook=\"product-item-root\""],
+            "selectors": {
+                "product_card": "[data-hook='product-item-root'], li[data-hook='product-list-item']",
+                "product_name": "[data-hook='product-item-name'], [data-hook='product-title']",
+                "product_price": "[data-hook='product-item-price-to-pay'], [data-hook='formatted-primary-price'], .price",
+                "product_image": "[data-hook='product-item-images'] img, img",
+                "product_link": "a[data-hook='product-item-container'], a"
+            }
+        },
+        "etsy": {
+            "name": "Etsy",
+            "indicators": ["etsystatic.com", "v2-listing-card", "etsy.com"],
+            "selectors": {
+                "product_card": "div.v2-listing-card, li.wt-list-unstyled .v2-listing-card",
+                "product_name": "h3.v2-listing-card__title, h3",
+                "product_price": ".currency-value, span.currency-value",
+                "product_image": "img.wt-width-full, img",
+                "product_link": "a.listing-link, a"
+            }
+        },
+        "walmart": {
+            "name": "Walmart",
+            "indicators": ["walmartimages.com", "data-automation-id=\"product-price\"", "walmart.com"],
+            "selectors": {
+                "product_card": "div[data-item-id], div[data-testid='product-card']",
+                "product_name": "span[data-automation-id='product-title'], [data-testid='product-title']",
+                "product_price": "div[data-automation-id='product-price'] .w_iDh7, [data-testid='product-price']",
+                "product_image": "img[data-testid='productTileImage'], img",
+                "product_link": "a[link-identifier], a[data-automation-id='product-title-link']"
             }
         }
     }
@@ -186,3 +258,21 @@ class PatternDetector:
     def get_generic_selectors(self) -> dict:
         """Return generic selectors as a fallback for unknown platforms."""
         return self.GENERIC_SELECTORS
+
+    async def detect_platform(
+        self,
+        url: str,
+        html: Optional[str] = None,
+        headers: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
+        """
+        Detect platform inspecting HTTP headers, <meta name="generator">,
+        HTML signatures, and domain patterns.
+        """
+        from app.scrapers.scraper_registry import ScraperRegistry
+        return ScraperRegistry.detect_platform_detailed(
+            url=url,
+            html=html,
+            headers=headers,
+            fetch_if_needed=True
+        )
