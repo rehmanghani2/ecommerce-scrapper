@@ -12,16 +12,16 @@ class EbayScraper(BaseScraper):
     PLATFORM_NAME = "ebay"
     
     SELECTORS = {
-        "product_container": ".s-item",
-        "name": ".s-item__title",
-        "price": ".s-item__price",
-        "original_price": ".s-item__original-price",
-        "image": ".s-item__image-img",
-        "link": ".s-item__link",
-        "shipping": ".s-item__shipping",
-        "location": ".s-item__location",
-        "seller": ".s-item__seller-info-text",
-        "condition": ".SECONDARY_INFO",
+        "product_container": ".s-card, .s-item, ul.srp-results > li",
+        "name": "[role='heading'], .s-card__title, .s-item__title, h3",
+        "price": ".s-card__price, .s-item__price, span[class*='price']",
+        "original_price": ".s-item__original-price, del, .strikethrough",
+        "image": ".s-card__image img, .s-item__image-img, img",
+        "link": "a.s-card__link, a.s-item__link, a",
+        "shipping": ".s-item__shipping, [class*='shipping']",
+        "location": ".s-item__location, [class*='location']",
+        "seller": ".s-item__seller-info-text, [class*='seller']",
+        "condition": ".SECONDARY_INFO, [class*='condition']",
         "bids": ".s-item__bids",
         "time_left": ".s-item__time-left",
         "hot": ".s-item__hot-text",
@@ -29,14 +29,18 @@ class EbayScraper(BaseScraper):
     
     async def detect_products(self, page: Page) -> List[ElementHandle]:
         """Detect eBay product elements"""
-        await page.wait_for_selector(
-            self.SELECTORS["product_container"],
-            timeout=self.config.timeout
-        )
+        container_selector = ".s-card, .s-item, ul.srp-results > li"
+        try:
+            await page.wait_for_selector(
+                container_selector,
+                timeout=self.config.timeout
+            )
+        except Exception:
+            pass
         
-        products = await page.query_selector_all(self.SELECTORS["product_container"])
+        products = await page.query_selector_all(container_selector)
         
-        # Filter out the "Shop on eBay" header item
+        # Filter out the "Shop on eBay" header item or empty cards
         filtered = []
         for product in products:
             title = await self._get_text(product, self.SELECTORS["name"])

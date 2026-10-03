@@ -104,14 +104,18 @@ class PlaywrightScraper:
                         }
                     }
 
-                    def _launch_browser(use_proxy=False):
-                        kw = {"headless": True, "args": launch_args}
+                    def _launch_browser(use_proxy=False, engine_name="chromium"):
+                        kw = {"headless": True}
+                        if engine_name == "chromium":
+                            kw["args"] = launch_args
                         if use_proxy and self.proxy:
                             kw["proxy"] = self.proxy
                             _sync_log(f"  ↳ Using proxy server: {self.proxy.get('server', self.proxy)}")
                         else:
-                            _sync_log("  ↳ Direct connection (no proxy)")
-                        browser = p.chromium.launch(**kw)
+                            _sync_log(f"  ↳ Direct connection (no proxy) [{engine_name}]")
+                        
+                        browser_factory = getattr(p, engine_name, p.chromium)
+                        browser = browser_factory.launch(**kw)
                         context = browser.new_context(**context_kwargs)
                         pg = context.new_page()
                         try:
@@ -127,9 +131,10 @@ class PlaywrightScraper:
                         """)
                         return browser, pg
 
-                    # Strategy: try direct first, fallback to proxy on 403/503/tunnel error
+                    # Strategy: select optimal browser engine (Firefox bypasses Akamai/eBay blocks)
+                    current_engine = "firefox" if "ebay." in self.allowed_domain else "chromium"
                     using_proxy = False
-                    browser, page = _launch_browser(use_proxy=False)
+                    browser, page = _launch_browser(use_proxy=False, engine_name=current_engine)
 
                     while self._queue and pages_scraped < self.max_pages and self._total_products < self.max_products:
                         url, depth = self._queue.pop(0)
@@ -196,7 +201,13 @@ class PlaywrightScraper:
                         
                         # Wait up to 3 seconds specifically for product cards to load dynamically
                         try:
-                            page.wait_for_selector("div.grid div.bg-white.flex-col, div[data-product-card], .product, .products, [class*='product']", timeout=3000)
+                            page.wait_for_selector(
+                                "div[data-component-type='s-search-result'], .s-card, .s-item, "
+                                "div[data-item-id], div[data-testid='product-card'], div.v2-listing-card, "
+                                "article.card, .item.product.product-item, .grid-item, [data-hook='product-item-root'], "
+                                "div.grid div.bg-white.flex-col, div[data-product-card], .product, .products, [class*='product']",
+                                timeout=3000
+                            )
                         except Exception:
                             # Not a product page, or loaded slow, proceed anyway
                             page.wait_for_timeout(1500)

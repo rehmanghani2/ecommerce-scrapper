@@ -237,25 +237,67 @@ async def get_supported_platforms():
             {
                 "id": "shopify",
                 "name": "Shopify",
-                "description": "Shopify-based stores",
+                "description": "Shopify-based stores (Liquid themes, native JSON endpoints)",
                 "auto_detect": True
             },
             {
                 "id": "woocommerce",
                 "name": "WooCommerce",
-                "description": "WordPress WooCommerce stores",
+                "description": "WordPress WooCommerce stores (StoreAPI, WC product markup)",
+                "auto_detect": True
+            },
+            {
+                "id": "bigcommerce",
+                "name": "BigCommerce",
+                "description": "BigCommerce stores (Stencil themes, GraphQL)",
                 "auto_detect": True
             },
             {
                 "id": "magento",
                 "name": "Magento",
-                "description": "Magento/Adobe Commerce stores",
+                "description": "Magento 2 / Adobe Commerce / Hyvä stores",
+                "auto_detect": True
+            },
+            {
+                "id": "squarespace",
+                "name": "Squarespace",
+                "description": "Squarespace Commerce (?format=json, grid-item)",
+                "auto_detect": True
+            },
+            {
+                "id": "wix",
+                "name": "Wix",
+                "description": "Wix Stores (data-hook selectors, warmup data)",
+                "auto_detect": True
+            },
+            {
+                "id": "etsy",
+                "name": "Etsy",
+                "description": "Etsy Marketplace listings and shops",
+                "auto_detect": True
+            },
+            {
+                "id": "walmart",
+                "name": "Walmart",
+                "description": "Walmart Marketplace search and categories",
+                "auto_detect": True
+            },
+            {
+                "id": "amazon",
+                "name": "Amazon",
+                "description": "Amazon Marketplace product search and ASINs",
+                "auto_detect": True
+            },
+            {
+                "id": "ebay",
+                "name": "eBay",
+                "description": "eBay Marketplace listings, cards, and auctions",
                 "auto_detect": True
             },
             {
                 "id": "generic",
                 "name": "Generic",
-                "description": "Any e-commerce website",
+                "description": "Any e-commerce website (heuristic & AI detection)",
                 "auto_detect": True
             }
         ]
@@ -380,7 +422,12 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                     pw_proxy = proxy_setting
                     httpx_proxy = proxy_setting.get("server")
 
-            if config and getattr(config, 'javascript_rendering', False):
+            use_pw = bool(config and getattr(config, 'javascript_rendering', False))
+            domain_lower = url.lower()
+            if any(m in domain_lower for m in ("amazon.", "ebay.", "walmart.", "etsy.")):
+                use_pw = True
+
+            if use_pw:
                 from app.core.playwright_scraper import PlaywrightScraper
                 scraper = PlaywrightScraper(
                     job_id=job_id,

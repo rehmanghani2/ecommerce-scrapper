@@ -14,15 +14,16 @@ class AmazonScraper(BaseScraper):
     # Amazon-specific selectors
     SELECTORS = {
         "product_container": "[data-component-type='s-search-result']",
-        "name": "h2 a span",
+        "name": "h2 a span, h2 span, span.a-text-normal",
         "price_whole": ".a-price-whole",
         "price_fraction": ".a-price-fraction",
         "price_symbol": ".a-price-symbol",
-        "original_price": ".a-text-price .a-offscreen",
-        "image": ".s-image",
-        "rating": ".a-icon-star-small .a-icon-alt",
+        "price_offscreen": ".a-price .a-offscreen, span.a-offscreen",
+        "original_price": ".a-text-price .a-offscreen, .a-text-price",
+        "image": ".s-image, img",
+        "rating": ".a-icon-star-small .a-icon-alt, .a-icon-alt",
         "reviews": ".a-size-base.s-underline-text",
-        "link": "h2 a",
+        "link": "h2 a, a.a-link-normal",
         "prime": ".s-prime",
         "sponsored": ".s-label-popover-default",
         "brand": ".a-size-base-plus.a-color-base",
@@ -76,6 +77,15 @@ class AmazonScraper(BaseScraper):
                 data["price"] = float(price_str)
             except:
                 data["price"] = None
+        else:
+            price_offscreen = await self._get_text(element, self.SELECTORS["price_offscreen"])
+            if price_offscreen:
+                match = re.search(r'[\d,]+\.?\d*', price_offscreen)
+                if match:
+                    try:
+                        data["price"] = float(match.group().replace(",", ""))
+                    except:
+                        data["price"] = None
         
         # Original price
         original_price_text = await self._get_text(

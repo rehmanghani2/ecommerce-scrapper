@@ -22,12 +22,19 @@ HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
+        "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-GB,en;q=0.9",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
+    "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
 }
 
 # Known platform selectors by domain keyword
@@ -115,18 +122,18 @@ PLATFORM_SELECTORS: Dict[str, Dict] = {
     "amazon": {
         "platform": "Amazon",
         "product_container": "div[data-component-type='s-search-result']",
-        "name": "h2 a.a-link-normal span",
-        "price": "span.a-price span.a-offscreen",
-        "image": "img.s-image",
-        "link": "h2 a.a-link-normal",
+        "name": "h2 a.a-link-normal span, h2 span, span.a-text-normal",
+        "price": "span.a-price span.a-offscreen, .a-price .a-offscreen, .a-price-whole",
+        "image": "img.s-image, img",
+        "link": "h2 a.a-link-normal, h2 a",
     },
     "ebay": {
         "platform": "eBay",
-        "product_container": ".s-item, li.s-item",
-        "name": ".s-item__title",
-        "price": ".s-item__price",
-        "image": ".s-item__image-img, img",
-        "link": "a.s-item__link",
+        "product_container": ".s-card, .s-item, ul.srp-results > li",
+        "name": "[role='heading'], .s-card__title, .s-item__title, h3",
+        "price": ".s-card__price, .s-item__price, span[class*='price']",
+        "image": ".s-card__image img, .s-item__image-img, img",
+        "link": "a.s-card__link, a.s-item__link, a",
     },
     "etsy": {
         "platform": "Etsy",
