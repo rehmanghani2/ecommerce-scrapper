@@ -105,6 +105,13 @@ class Settings(BaseSettings):
     AWS_S3_AUTO_UPLOAD: bool = Field(default=False, env="AWS_S3_AUTO_UPLOAD")
     AWS_S3_ACL: str = Field(default="public-read", env="AWS_S3_ACL")
     
+    # Supabase Free Cloud Storage Settings
+    SUPABASE_URL: Optional[str] = Field(default=None, env="SUPABASE_URL")  # e.g. https://xyzcompany.supabase.co
+    SUPABASE_KEY: Optional[str] = Field(default=None, env="SUPABASE_KEY")  # anon or service_role key
+    SUPABASE_STORAGE_BUCKET: str = Field(default="product-images", env="SUPABASE_STORAGE_BUCKET")
+    SUPABASE_STORAGE_FOLDER: str = Field(default="products", env="SUPABASE_STORAGE_FOLDER")
+    SUPABASE_AUTO_UPLOAD: bool = Field(default=False, env="SUPABASE_AUTO_UPLOAD")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

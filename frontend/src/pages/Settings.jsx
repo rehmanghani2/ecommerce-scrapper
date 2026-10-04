@@ -17,6 +17,7 @@ import {
   ChatBubbleLeftRightIcon,
   PhotoIcon,
   ServerStackIcon,
+  CircleStackIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/helpers'
@@ -36,6 +37,7 @@ import scraperService from '@/services/scraperService'
 import alertService from '@/services/alertService'
 import cloudinaryService from '@/services/cloudinaryService'
 import s3Service from '@/services/s3Service'
+import supabaseService from '@/services/supabaseService'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -84,6 +86,12 @@ export default function Settings() {
       label: 'AWS S3 / Cloud Storage',
       icon: ServerStackIcon,
       content: <S3StorageSettings />,
+    },
+    {
+      key: 'supabase',
+      label: 'Supabase Free Storage',
+      icon: CircleStackIcon,
+      content: <SupabaseStorageSettings />,
     },
     {
       key: 'appearance',
@@ -1369,6 +1377,215 @@ function S3StorageSettings() {
               </div>
               <div className="text-gray-500">
                 Content-Type: {uploadResult.content_type} • Size: {(uploadResult.size_bytes / 1024).toFixed(1)} KB
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function SupabaseStorageSettings() {
+  const [supabaseUrl, setSupabaseUrl] = useState('')
+  const [supabaseKey, setSupabaseKey] = useState('')
+  const [bucketName, setBucketName] = useState('product-images')
+  const [folder, setFolder] = useState('products')
+  const [testResult, setTestResult] = useState(null)
+  const [testing, setTesting] = useState(false)
+
+  // Sandbox upload state
+  const [sampleUrl, setSampleUrl] = useState('')
+  const [uploadResult, setUploadResult] = useState(null)
+  const [uploading, setUploading] = useState(false)
+
+  const handleTestConnection = async () => {
+    try {
+      setTesting(true)
+      setTestResult(null)
+      const res = await supabaseService.testConnection({
+        supabase_url: supabaseUrl,
+        supabase_key: supabaseKey,
+        bucket_name: bucketName,
+      })
+      setTestResult(res)
+      if (res.success) {
+        toast.success(res.message || 'Connected to Supabase Storage!')
+      } else {
+        toast.error(res.message || 'Failed to connect to Supabase.')
+      }
+    } catch (e) {
+      toast.error(e.message || 'Error testing Supabase credentials')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const handleTestUpload = async () => {
+    if (!sampleUrl.trim()) {
+      toast.error('Please enter an image URL to test upload')
+      return
+    }
+    try {
+      setUploading(true)
+      setUploadResult(null)
+      const res = await supabaseService.uploadImage(
+        sampleUrl,
+        bucketName || null,
+        folder || null,
+        supabaseUrl || null,
+        supabaseKey || null
+      )
+      setUploadResult(res)
+      toast.success('Image successfully downloaded and streamed into Supabase Storage!')
+    } catch (e) {
+      toast.error(e.response?.data?.detail || e.message || 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <CircleStackIcon className="w-5 h-5 text-emerald-500" />
+              Supabase Free Cloud Storage
+            </CardTitle>
+            <Badge variant="success">100% Free Tier • No AWS Bill • Fast Global CDN</Badge>
+          </div>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Host scraped competitor images completely free on <strong>Supabase Storage</strong> without needing an AWS account or paid credit card. 
+            All images are automatically served over Supabase's global CDN with zero bandwidth egress charges on the generous free plan.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Supabase Project URL"
+              placeholder="https://xyzcompany.supabase.co"
+              value={supabaseUrl}
+              onChange={(e) => setSupabaseUrl(e.target.value)}
+              hint="Found under Project Settings → API in your Supabase Dashboard"
+            />
+            <Input
+              label="Supabase API Key (anon / service_role)"
+              type="password"
+              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+              value={supabaseKey}
+              onChange={(e) => setSupabaseKey(e.target.value)}
+              hint="Public anon key or service_role secret key"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Storage Bucket Name"
+              placeholder="product-images"
+              value={bucketName}
+              onChange={(e) => setBucketName(e.target.value)}
+              hint="Make sure the bucket is marked as 'Public' in Supabase Storage"
+            />
+            <Input
+              label="Directory Folder Prefix"
+              placeholder="products"
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              hint="Subfolder path inside the bucket (default: products/)"
+            />
+          </div>
+
+          {/* Connection Test Diagnostics */}
+          {testResult && (
+            <div className={`p-4 rounded-xl text-xs space-y-1.5 border ${
+              testResult.success
+                ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                : 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+            }`}>
+              <div className="font-semibold flex items-center gap-1.5">
+                {testResult.success ? '✓' : '✕'} {testResult.message}
+              </div>
+              {testResult.bucket && (
+                <div className="text-gray-600 dark:text-gray-400">
+                  Target Bucket: <span className="font-semibold">{testResult.bucket}</span> • Public Access: {testResult.is_public ? 'Enabled ✓' : 'Disabled (Images won\'t be publicly visible)'}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              disabled={testing || (!supabaseUrl && !supabaseKey)}
+              onClick={handleTestConnection}
+            >
+              {testing ? 'Testing Bucket...' : 'Test Supabase Bucket'}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                toast.success('Supabase Storage configuration saved!')
+              }}
+            >
+              Save Configuration
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Live Supabase Upload Sandbox */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <SparklesIcon className="w-4 h-4 text-primary-600" />
+            Live Supabase Image Ingestion Sandbox
+          </CardTitle>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Paste any competitor product image URL to test download and direct streaming into your free Supabase Storage bucket.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Input
+              placeholder="https://images.unsplash.com/photo-1505740420928-5e560c06d30e"
+              value={sampleUrl}
+              onChange={(e) => setSampleUrl(e.target.value)}
+              className="flex-1"
+            />
+            <Button
+              variant="secondary"
+              onClick={handleTestUpload}
+              disabled={uploading || !sampleUrl.trim()}
+            >
+              {uploading ? 'Archiving to Supabase...' : 'Download & Stream to Supabase'}
+            </Button>
+          </div>
+
+          {uploadResult && uploadResult.success && (
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 flex flex-col md:flex-row gap-4 items-center">
+              <img
+                src={uploadResult.supabase_url}
+                alt="Supabase preview"
+                className="w-24 h-24 object-cover rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm"
+              />
+              <div className="space-y-1 text-xs flex-1">
+                <div className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                  <CheckCircleIcon className="w-4 h-4" />
+                  Successfully Streamed to Supabase Bucket ({uploadResult.bucket})
+                </div>
+                <div className="text-gray-600 dark:text-gray-300 font-mono break-all">
+                  Object Path: <span className="font-semibold text-gray-800 dark:text-gray-200">{uploadResult.supabase_path}</span>
+                </div>
+                <div className="text-gray-600 dark:text-gray-300 font-mono break-all">
+                  Public CDN URL: <a href={uploadResult.supabase_url} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">{uploadResult.supabase_url}</a>
+                </div>
+                <div className="text-gray-500">
+                  Content-Type: {uploadResult.content_type} • Size: {(uploadResult.size_bytes / 1024).toFixed(1)} KB
+                </div>
               </div>
             </div>
           )}

@@ -756,6 +756,18 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                                     except Exception as s3_err:
                                         logger.debug(f"S3 auto-upload error: {s3_err}")
 
+                                # Optional Supabase Free Cloud Storage auto-upload
+                                if settings.SUPABASE_AUTO_UPLOAD and p.image_url:
+                                    try:
+                                        from app.services.supabase_storage_service import supabase_storage_service
+                                        if supabase_storage_service.is_configured():
+                                            supa_res = await supabase_storage_service.download_and_upload_image(p.image_url)
+                                            if supa_res.get("success"):
+                                                p.supabase_url = supa_res.get("supabase_url")
+                                                p.supabase_path = supa_res.get("supabase_path")
+                                    except Exception as supa_err:
+                                        logger.debug(f"Supabase auto-upload error: {supa_err}")
+
                                 save_db.add(p)
                                 await save_db.flush()
 

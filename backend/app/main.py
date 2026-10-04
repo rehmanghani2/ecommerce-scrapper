@@ -12,7 +12,7 @@ import os
 
 from app.config import settings
 from app.models.database import init_db, close_db
-from app.api.routes import scraper, jobs, exports, auth, websocket, products, schedules, integrations, alerts, cloudinary, s3
+from app.api.routes import scraper, jobs, exports, auth, websocket, products, schedules, integrations, alerts, cloudinary, s3, supabase
 from app.services.scheduler_service import scheduler_service
 
 # Configure logging
@@ -187,6 +187,12 @@ app.include_router(
     s3.router,
     prefix=f"{settings.API_PREFIX}",
     tags=["AWS S3 Storage"]
+)
+
+app.include_router(
+    supabase.router,
+    prefix=f"{settings.API_PREFIX}",
+    tags=["Supabase Cloud Storage"]
 )
 
 # Add WebSocket router (add after other routers)

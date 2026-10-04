@@ -58,6 +58,8 @@ class Product(Base):
     cloudinary_public_id = Column(String(255), nullable=True)
     s3_url = Column(Text, nullable=True)
     s3_key = Column(String(500), nullable=True)
+    supabase_url = Column(Text, nullable=True)
+    supabase_path = Column(String(500), nullable=True)
     
     # Categorization
     category = Column(String(255), nullable=True)
@@ -145,6 +147,8 @@ class Product(Base):
             "cloudinary_public_id": self.cloudinary_public_id,
             "s3_url": self.s3_url,
             "s3_key": self.s3_key,
+            "supabase_url": self.supabase_url,
+            "supabase_path": self.supabase_path,
             "category": self.category,
             "subcategory": self.subcategory,
             "category_path": self.category_path,
@@ -177,6 +181,7 @@ class Product(Base):
             "Image URL": self.image_url,
             "Cloudinary URL": self.cloudinary_url or "",
             "S3 URL": self.s3_url or "",
+            "Supabase URL": self.supabase_url or "",
             "Category": self.category,
             "Subcategory": self.subcategory,
             "Category Path": self.category_path,
