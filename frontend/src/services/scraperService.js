@@ -124,10 +124,36 @@ export const scraperService = {
   },
 
   /**
-   * Test proxy pool connectivity and latency
+   * Parse remote/local sitemap XML or .gz (traverses nested sitemap indexes)
    */
-  async testProxyPool(proxies = null) {
-    return await apiPost('/scraper/proxies/test', { proxies })
+  async parseSitemap(sitemapUrl, filterProductsOnly = false) {
+    return await apiPost('/scraper/sitemap/parse', {
+      sitemap_url: sitemapUrl,
+      filter_products_only: filterProductsOnly,
+    })
+  },
+
+  /**
+   * Parse uploaded CSV, TSV, or TXT file content
+   */
+  async parseBulkFile(content, fileName = '') {
+    return await apiPost('/scraper/bulk/parse-file', {
+      content,
+      file_name: fileName,
+    })
+  },
+
+  /**
+   * Start parallel bulk crawling across up to 10,000+ URLs
+   */
+  async startBulkScraping({ urls, name = '', concurrency = 10, requestDelay = 0.5, selectors = null }) {
+    return await apiPost('/scraper/bulk/start', {
+      urls,
+      name,
+      concurrency,
+      request_delay: requestDelay,
+      selectors,
+    })
   },
 }
 

@@ -494,6 +494,116 @@ async def get_supported_platforms():
     }
 
 
+@router.post("/sitemap/parse")
+async def parse_sitemap(payload: Dict[str, Any]):
+    """
+    Parse a remote or local sitemap URL (including sitemap indexes and .gz files).
+    Discovers all product URLs up to depth limit.
+    """
+    sitemap_url = payload.get("sitemap_url")
+    filter_products = bool(payload.get("filter_products_only", False))
+    if not sitemap_url:
+        raise HTTPException(status_code=400, detail="sitemap_url is required")
+
+    from app.core.sitemap_parser import sitemap_parser
+    result = await sitemap_parser.fetch_and_parse(
+        sitemap_url=sitemap_url,
+        filter_products_only=filter_products
+    )
+    return result
+
+
+@router.post("/bulk/parse-file")
+async def parse_bulk_file(payload: Dict[str, Any]):
+    """
+    Parse uploaded CSV, TSV, or raw text file content.
+    Automatically sniffs delimiters, header rows, and extracts all valid URLs.
+    """
+    file_content = payload.get("content", "")
+    file_name = payload.get("file_name", "").lower()
+
+    if not file_content:
+        raise HTTPException(status_code=400, detail="file content is required")
+
+    from app.services.bulk_importer_service import bulk_importer_service
+    if file_name.endswith(".csv") or file_name.endswith(".tsv") or "," in file_content or "\t" in file_content:
+        result = bulk_importer_service.parse_csv_or_tsv(file_content)
+    else:
+        result = bulk_importer_service.parse_raw_text(file_content)
+
+    return result
+
+
+@router.post("/bulk/start")
+async def start_bulk_scraping(
+    payload: Dict[str, Any],
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Start a high-throughput parallel bulk crawl across a list of URLs (from CSV or sitemap).
+    Spawns concurrent worker pool up to 10,000+ items.
+    """
+    urls = payload.get("urls", [])
+    if not urls or not isinstance(urls, list):
+        raise HTTPException(status_code=400, detail="A non-empty list of 'urls' is required")
+
+    # Clean & validate
+    valid_urls = [str(u).strip() for u in urls if str(u).strip().startswith("http")]
+    if not valid_urls:
+        raise HTTPException(status_code=400, detail="No valid HTTP/HTTPS URLs provided")
+
+    name = payload.get("name") or f"Bulk Import ({len(valid_urls)} URLs)"
+    concurrency = int(payload.get("concurrency", 10))
+    request_delay = float(payload.get("request_delay", 0.5))
+    custom_selectors = payload.get("selectors")
+
+    # Parse primary domain from first URL
+    first_parsed = urlparse(valid_urls[0])
+    domain = first_parsed.netloc or "bulk-import"
+
+    job_id = f"job_bulk_{uuid.uuid4().hex[:10]}"
+    job = Job(
+        job_id=job_id,
+        name=name,
+        description=f"Parallel bulk crawl across {len(valid_urls)} URLs (concurrency: {concurrency})",
+        url=valid_urls[0],
+        domain=domain,
+        job_type=JobType.PRODUCT_LIST,
+        status=JobStatus.PENDING,
+        total_pages=len(valid_urls),
+        config={
+            "is_bulk": True,
+            "urls_count": len(valid_urls),
+            "concurrency": concurrency,
+            "request_delay": request_delay,
+            "selectors": custom_selectors,
+        }
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    # Launch bulk scraping in background
+    background_tasks.add_task(
+        run_bulk_scraper_job,
+        job.id,
+        valid_urls,
+        concurrency,
+        request_delay,
+        custom_selectors
+    )
+
+    return {
+        "success": True,
+        "message": f"Bulk scraping job started for {len(valid_urls)} URLs",
+        "job_id": job_id,
+        "total_urls": len(valid_urls),
+        "status": "pending",
+    }
+
+
+
 async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]):
     """Background task to run the scraper using httpx + BeautifulSoup."""
     from datetime import datetime, timezone
@@ -781,3 +891,198 @@ async def test_proxy_pool(payload: Optional[Dict[str, Any]] = None):
         "active": len(successful),
         "results": results
     }
+
+
+async def run_bulk_scraper_job(
+    job_id: int,
+    urls: List[str],
+    concurrency: int = 10,
+    request_delay: float = 0.5,
+    custom_selectors: Optional[Dict[str, Any]] = None,
+):
+    """
+    Background worker for bulk parallel scraping.
+    Processes thousands of product URLs concurrently with progress updates and price drop alerting.
+    """
+    from datetime import datetime, timezone
+    from sqlalchemy import select
+    from app.models.database import get_db_context
+    from app.models.product import Product, PriceHistory
+    from app.core.bulk_batch_scraper import BulkBatchScraper
+    from app.core.proxy_manager import build_proxy_pool
+    from app.config import settings
+
+    async with get_db_context() as db:
+        job = await db.get(Job, job_id)
+        if not job:
+            return
+
+        job.status = JobStatus.RUNNING
+        job.started_at = datetime.now(timezone.utc)
+        job.logs = []
+        await db.commit()
+
+        async def write_log(message: str, level: str = "info"):
+            try:
+                async with get_db_context() as log_db:
+                    j = await log_db.get(Job, job_id)
+                    if j:
+                        current_logs = list(j.logs or [])
+                        current_logs.append({
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "level": level,
+                            "message": message,
+                        })
+                        j.logs = current_logs
+                        await log_db.commit()
+            except Exception as e:
+                logger.error(f"write_log error: {e}")
+
+        async def save_products(products_data: list):
+            try:
+                async with get_db_context() as save_db:
+                    j = await save_db.get(Job, job_id)
+                    if not j:
+                        return
+                    saved = 0
+                    for data in products_data:
+                        try:
+                            p_url = data.get("url")
+                            raw_price = data.get("price")
+                            p_price = float(raw_price) if raw_price is not None else None
+                            p_text = data.get("price_text")
+                            p_curr = data.get("currency") or "USD"
+                            domain = urlparse(p_url).netloc if p_url else j.domain
+
+                            existing_p = None
+                            if p_url:
+                                stmt = select(Product).where(Product.url == p_url).limit(1)
+                                res = await save_db.execute(stmt)
+                                existing_p = res.scalar_one_or_none()
+
+                            if existing_p:
+                                old_price = float(existing_p.price) if existing_p.price is not None else None
+                                if p_price is not None:
+                                    if old_price is not None and old_price != p_price:
+                                        existing_p.previous_price = existing_p.price
+                                        change = round(p_price - old_price, 2)
+                                        existing_p.price_change = change
+                                        if old_price > 0:
+                                            existing_p.price_change_percentage = round((change / old_price) * 100, 2)
+
+                                        if p_price < old_price:
+                                            try:
+                                                from app.services.alert_service import alert_service
+                                                await alert_service.process_price_change(
+                                                    db=save_db,
+                                                    product_id=existing_p.id,
+                                                    product_name=existing_p.name,
+                                                    product_url=existing_p.url,
+                                                    old_price=old_price,
+                                                    new_price=p_price,
+                                                    currency=p_curr,
+                                                    image_url=existing_p.image_url,
+                                                )
+                                            except Exception as alert_err:
+                                                logger.error(f"Error in price drop alert: {alert_err}")
+
+                                    existing_p.price = p_price
+                                    if existing_p.lowest_price is None or p_price < float(existing_p.lowest_price):
+                                        existing_p.lowest_price = p_price
+                                    if existing_p.highest_price is None or p_price > float(existing_p.highest_price):
+                                        existing_p.highest_price = p_price
+
+                                if data.get("name"):
+                                    existing_p.name = data["name"]
+                                if data.get("image_url"):
+                                    existing_p.image_url = data["image_url"]
+                                existing_p.updated_at = datetime.now(timezone.utc)
+                                saved += 1
+                            else:
+                                p = Product(
+                                    job_id=job_id,
+                                    name=data.get("name", "Product")[:500],
+                                    price=p_price,
+                                    currency=p_curr,
+                                    price_text=p_text,
+                                    lowest_price=p_price,
+                                    highest_price=p_price,
+                                    url=p_url,
+                                    image_url=data.get("image_url"),
+                                    source_domain=domain,
+                                )
+                                save_db.add(p)
+                                await save_db.flush()
+
+                                if p_price is not None:
+                                    ph = PriceHistory(
+                                        product_id=p.id,
+                                        job_id=job_id,
+                                        price=p_price,
+                                        price_text=p_text,
+                                        currency=p_curr,
+                                    )
+                                    save_db.add(ph)
+                                saved += 1
+                        except Exception as ex:
+                            logger.error(f"Error saving product: {ex}")
+
+                    if saved:
+                        j.total_products = (j.total_products or 0) + saved
+                        await save_db.commit()
+            except Exception as e:
+                logger.error(f"save_products error in bulk job: {e}")
+
+        async def update_progress(completed: int, total: int, successful: int):
+            try:
+                async with get_db_context() as prog_db:
+                    j = await prog_db.get(Job, job_id)
+                    if j:
+                        j.scraped_pages = completed
+                        j.failed_pages = completed - successful
+                        j.progress = round((completed / max(1, total)) * 100, 1)
+                        await prog_db.commit()
+            except Exception as e:
+                logger.error(f"update_progress error: {e}")
+
+        try:
+            proxy_pool = build_proxy_pool(
+                failover_enabled=getattr(settings, "PROXY_FAILOVER_ENABLED", True),
+                max_retries=getattr(settings, "PROXY_MAX_RETRIES", 3),
+            )
+
+            bulk_scraper = BulkBatchScraper(
+                job_id=job_id,
+                urls=urls,
+                concurrency=concurrency,
+                request_delay=request_delay,
+                proxy_pool=proxy_pool,
+                custom_selectors=custom_selectors,
+                on_log=write_log,
+                on_product_batch=save_products,
+                on_progress=update_progress,
+            )
+
+            await bulk_scraper.run()
+
+            j = await db.get(Job, job_id)
+            if j:
+                j.status = JobStatus.COMPLETED
+                j.progress = 100.0
+                j.completed_at = datetime.now(timezone.utc)
+                await db.commit()
+
+        except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            logger.error(f"Bulk job {job_id} failed: {e}\n{error_trace}")
+            try:
+                j = await db.get(Job, job_id)
+                if j:
+                    j.status = JobStatus.FAILED
+                    j.error_message = str(e) or "Bulk scraper failed unexpectedly"
+                    j.error_trace = error_trace
+                    j.completed_at = datetime.now(timezone.utc)
+                    await db.commit()
+            except Exception:
+                pass

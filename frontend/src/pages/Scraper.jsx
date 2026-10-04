@@ -1,11 +1,13 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   GlobeAltIcon,
   LightBulbIcon,
   CheckCircleIcon,
+  DocumentArrowUpIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
 import { Card, Alert } from '@/components/Common'
-import { ScraperForm } from '@/components/Scraper'
+import { ScraperForm, BulkSitemapImporter } from '@/components/Scraper'
 
 const QUICK_TIPS = [
   'Auto-detection works best with standard e-commerce platforms',
@@ -24,6 +26,8 @@ const SUPPORTED_FEATURES = [
 ]
 
 export default function Scraper() {
+  const [activeTab, setActiveTab] = useState('single') // 'single' | 'bulk'
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -33,19 +37,61 @@ export default function Scraper() {
           Web Scraper
         </h1>
         <p className="text-gray-500 dark:text-gray-400 mt-1">
-          Extract product data from any e-commerce website
+          Extract product data from any e-commerce website or crawl 10,000+ products via Sitemap XML / CSV
         </p>
       </div>
 
-      {/* Info Alert */}
-      <Alert variant="info" title="How it works">
-        Enter a URL from an e-commerce website, and our scraper will automatically 
-        detect product listings and extract all available data. You can customize 
-        the extraction settings or let the auto-detection handle everything.
-      </Alert>
+      {/* Main Mode Tabs */}
+      <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-2 rounded-xl shadow-sm">
+        <button
+          onClick={() => setActiveTab('single')}
+          className={`flex-1 py-3 px-4 font-semibold text-sm rounded-lg flex items-center justify-center gap-2 transition-all ${
+            activeTab === 'single'
+              ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300 shadow-sm border border-primary-200 dark:border-primary-800'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <MagnifyingGlassIcon className="w-5 h-5 text-primary-600" />
+          Single URL / Store Crawler
+        </button>
 
-      {/* Main Form */}
-      <ScraperForm />
+        <button
+          onClick={() => setActiveTab('bulk')}
+          className={`flex-1 py-3 px-4 font-semibold text-sm rounded-lg flex items-center justify-center gap-2 transition-all ${
+            activeTab === 'bulk'
+              ? 'bg-primary-50 dark:bg-primary-950/40 text-primary-700 dark:text-primary-300 shadow-sm border border-primary-200 dark:border-primary-800'
+              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <DocumentArrowUpIcon className="w-5 h-5 text-primary-600" />
+          Bulk URL & Sitemap.xml Importer (10,000+ Parallel)
+        </button>
+      </div>
+
+      {/* Content based on Active Tab */}
+      {activeTab === 'single' ? (
+        <>
+          {/* Info Alert */}
+          <Alert variant="info" title="How it works">
+            Enter a URL from an e-commerce website, and our scraper will automatically 
+            detect product listings and extract all available data. You can customize 
+            the extraction settings or let the auto-detection handle everything.
+          </Alert>
+
+          {/* Main Form */}
+          <ScraperForm />
+        </>
+      ) : (
+        <>
+          <Alert variant="success" title="High-Throughput Parallel Scraping">
+            Upload a spreadsheet (CSV/TSV), paste a list of links, or provide a sitemap XML URL. 
+            The system handles nested sitemap indexes and crawls up to 10,000+ products concurrently 
+            using an asyncio worker pool with rotating proxy support.
+          </Alert>
+
+          <BulkSitemapImporter />
+        </>
+      )}
 
       {/* Help Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
