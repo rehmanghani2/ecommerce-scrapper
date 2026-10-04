@@ -20,7 +20,7 @@ class AIExtractorService:
     """Service utilizing Google Gemini LLM for zero-shot e-commerce data extraction."""
 
     def __init__(self):
-        self.default_model = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+        self.default_model = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
 
     def _get_api_key(self, custom_key: Optional[str] = None) -> Optional[str]:
         """Resolve Gemini API key from parameter or environment settings."""

@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     
     # AI Extraction Settings (Gemini)
     GEMINI_API_KEY: Optional[str] = Field(default=None, env="GEMINI_API_KEY")
-    GEMINI_MODEL: str = Field(default="gemini-1.5-flash", env="GEMINI_MODEL")
+    GEMINI_MODEL: str = Field(default="gemini-2.5-flash", env="GEMINI_MODEL")
     
     class Config:
         env_file = ".env"
