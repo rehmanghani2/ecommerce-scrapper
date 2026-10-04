@@ -7,6 +7,7 @@ export function UrlInput({
   value,
   onChange,
   onAnalyze,
+  onOpenVisualPicker,
   loading = false,
   error,
   placeholder = 'Enter e-commerce website URL...',
@@ -64,7 +65,18 @@ export function UrlInput({
           </button>
         )}
         
-        <div className="pr-2">
+        <div className="pr-2 flex items-center gap-2">
+          {onOpenVisualPicker && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onOpenVisualPicker}
+              disabled={!value || !isValidUrl(value)}
+              className="px-3 text-xs border-primary-500 text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-950/40"
+            >
+              🎨 Visual Picker
+            </Button>
+          )}
           <Button
             onClick={onAnalyze}
             disabled={!value || !isValidUrl(value) || loading}

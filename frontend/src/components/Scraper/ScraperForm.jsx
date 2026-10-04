@@ -23,6 +23,7 @@ import toast from 'react-hot-toast'
 import UrlInput from './UrlInput'
 import SelectorBuilder from './SelectorBuilder'
 import PreviewPanel from './PreviewPanel'
+import { VisualSelectorPickerModal } from './VisualSelectorPickerModal'
 
 const PLATFORM_OPTIONS = [
   { value: 'auto', label: 'Auto Detect' },
@@ -41,6 +42,7 @@ export function ScraperForm() {
   const [platform, setPlatform] = useState('auto')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [customSelectors, setCustomSelectors] = useState({})
+  const [visualPickerOpen, setVisualPickerOpen] = useState(false)
   
   // Config options
   const [config, setConfig] = useState({
@@ -123,6 +125,7 @@ export function ScraperForm() {
             value={url}
             onChange={setUrl}
             onAnalyze={() => analyzeMutation.mutate()}
+            onOpenVisualPicker={() => setVisualPickerOpen(true)}
             loading={analyzeMutation.isPending}
             error={analyzeMutation.error?.message}
           />
@@ -247,6 +250,7 @@ export function ScraperForm() {
                   onChange={setCustomSelectors}
                   testResults={testResults}
                   onTest={() => testSelectorsMutation.mutate()}
+                  onOpenVisualPicker={() => setVisualPickerOpen(true)}
                   loading={testSelectorsMutation.isPending}
                 />
               </div>
@@ -275,6 +279,18 @@ export function ScraperForm() {
           error={analyzeMutation.error?.message}
         />
       </div>
+
+      {/* Point-and-Click Visual Selector Picker Studio Modal */}
+      <VisualSelectorPickerModal
+        isOpen={visualPickerOpen}
+        onClose={() => setVisualPickerOpen(false)}
+        initialUrl={url}
+        initialSelectors={customSelectors}
+        onApplySelectors={(picked) => {
+          setCustomSelectors(picked)
+          setShowAdvanced(true)
+        }}
+      />
     </div>
   )
 }

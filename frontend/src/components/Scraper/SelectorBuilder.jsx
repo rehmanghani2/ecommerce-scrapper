@@ -50,6 +50,7 @@ export function SelectorBuilder({
   onChange,
   testResults = {},
   onTest,
+  onOpenVisualPicker,
   loading = false,
 }) {
   const [activeField, setActiveField] = useState(null)
@@ -84,10 +85,22 @@ export function SelectorBuilder({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CodeBracketIcon className="w-5 h-5" />
-          CSS Selectors
-        </CardTitle>
+        <div className="flex items-center justify-between w-full">
+          <CardTitle className="flex items-center gap-2">
+            <CodeBracketIcon className="w-5 h-5" />
+            CSS Selectors
+          </CardTitle>
+          {onOpenVisualPicker && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onOpenVisualPicker}
+              className="text-xs border-primary-500 text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-950/40"
+            >
+              🎨 Point-and-Click Visual Studio
+            </Button>
+          )}
+        </div>
       </CardHeader>
       
       <div className="space-y-4">

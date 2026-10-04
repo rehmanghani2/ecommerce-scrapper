@@ -3,18 +3,22 @@ Scraper API routes.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
+from typing import Optional, List, Dict, Any
 import uuid
+import json
 from urllib.parse import urlparse
 
 from app.models.database import get_db
 from app.models.job import Job, JobStatus, JobType
+from app.models.selector_preset import SelectorPreset
 from app.schemas.scraper_schema import (
     ScraperRequest, ScraperResponse, ScraperPreviewRequest,
     DetectedSelectors, ScraperConfig, SelectorConfig
 )
 from app.core.pattern_detector import PatternDetector
+from app.services.visual_picker_service import visual_picker_service
 
 
 router = APIRouter()
@@ -196,6 +200,32 @@ async def detect_platform(url: str):
         )
 
 
+@router.get("/visual-picker/render")
+async def render_for_visual_picker(url: str):
+    """
+    Render a target website inside the visual selector picker sandbox,
+    with asset rewriting, frame-buster neutralization, and interactive inspector script injected.
+    """
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    html_content = await visual_picker_service.render_page_for_picker(url)
+    return HTMLResponse(content=html_content)
+
+
+@router.post("/visual-picker/test")
+async def test_visual_selectors(payload: Dict[str, Any]):
+    """
+    Test custom CSS selectors on a live page and return element counts,
+    matching text samples, and real-time product preview items.
+    """
+    url = payload.get("url")
+    selectors = payload.get("selectors", {})
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    result = await visual_picker_service.test_custom_selectors(url, selectors)
+    return result
+
+
 @router.post("/test-selectors")
 async def test_selectors(
     url: str,
@@ -203,28 +233,93 @@ async def test_selectors(
 ):
     """
     Test custom selectors on a page.
-    
-    Use this to verify that your custom selectors work correctly
-    before starting a full scraping job.
     """
     try:
-        from app.core.product_extractor import ProductExtractor
-        
-        extractor = ProductExtractor()
-        result = await extractor.test_selectors(url, selectors)
-        
+        result = await visual_picker_service.test_custom_selectors(url, selectors)
         return {
-            "success": True,
+            "success": result.get("success", True),
             "url": url,
             "matched_elements": result.get("matched_elements", {}),
-            "sample_data": result.get("sample_data", [])
+            "sample_data": result.get("preview_products", [])
         }
-        
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to test selectors: {str(e)}"
         )
+
+
+@router.get("/presets")
+async def list_selector_presets(
+    domain: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
+    """List saved selector recipes / presets."""
+    from sqlalchemy import select
+    query = select(SelectorPreset).order_by(SelectorPreset.id.desc())
+    if domain:
+        query = query.where(SelectorPreset.domain.ilike(f"%{domain}%"))
+    res = await db.execute(query)
+    presets = res.scalars().all()
+
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "domain": p.domain,
+            "description": p.description,
+            "selectors": json.loads(p.selectors) if p.selectors else {},
+            "created_at": p.created_at,
+        }
+        for p in presets
+    ]
+
+
+@router.post("/presets")
+async def save_selector_preset(
+    payload: Dict[str, Any],
+    db: AsyncSession = Depends(get_db)
+):
+    """Save a custom selector recipe."""
+    name = payload.get("name")
+    domain = payload.get("domain")
+    description = payload.get("description", "")
+    selectors = payload.get("selectors", {})
+    if not name or not selectors:
+        raise HTTPException(status_code=400, detail="Name and selectors are required")
+
+    preset = SelectorPreset(
+        name=name,
+        domain=domain,
+        description=description,
+        selectors=json.dumps(selectors),
+    )
+    db.add(preset)
+    await db.commit()
+    await db.refresh(preset)
+
+    return {
+        "id": preset.id,
+        "name": preset.name,
+        "domain": preset.domain,
+        "description": preset.description,
+        "selectors": selectors,
+        "created_at": preset.created_at,
+    }
+
+
+@router.delete("/presets/{preset_id}")
+async def delete_selector_preset(
+    preset_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete a saved selector recipe."""
+    preset = await db.get(SelectorPreset, preset_id)
+    if not preset:
+        raise HTTPException(status_code=404, detail="Preset not found")
+    await db.delete(preset)
+    await db.commit()
+    return {"success": True, "message": "Preset deleted"}
 
 
 @router.get("/supported-platforms")
