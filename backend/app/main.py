@@ -12,7 +12,7 @@ import os
 
 from app.config import settings
 from app.models.database import init_db, close_db
-from app.api.routes import scraper, jobs, exports, auth, websocket, products, schedules
+from app.api.routes import scraper, jobs, exports, auth, websocket, products, schedules, integrations
 from app.services.scheduler_service import scheduler_service
 
 # Configure logging
@@ -163,6 +163,12 @@ app.include_router(
     schedules.router,
     prefix=f"{settings.API_PREFIX}",
     tags=["Schedules"]
+)
+
+app.include_router(
+    integrations.router,
+    prefix=f"{settings.API_PREFIX}",
+    tags=["Integrations"]
 )
 
 # Add WebSocket router (add after other routers)

@@ -9,14 +9,35 @@ import {
 import { cn, formatPrice, truncate } from '@/utils/helpers'
 import { Card, Badge } from '@/components/Common'
 
-export function ProductCard({ product, onClick }) {
+export function ProductCard({ product, onClick, selected = false, onToggleSelect = null }) {
   return (
     <Card
       hover
       padding="none"
-      className="overflow-hidden cursor-pointer"
+      className={cn(
+        "overflow-hidden cursor-pointer relative",
+        selected && "ring-2 ring-primary-500 bg-primary-50/10 dark:bg-primary-950/20"
+      )}
       onClick={onClick}
     >
+      {/* Select checkbox badge */}
+      {onToggleSelect && (
+        <div
+          className="absolute top-2 left-2 z-10 bg-white/90 dark:bg-gray-900/90 rounded p-1 shadow-sm"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleSelect(product.id)
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(product.id)}
+            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+          />
+        </div>
+      )}
+
       {/* Image */}
       <div className="aspect-square bg-gray-100 dark:bg-gray-800 relative overflow-hidden">
         {product.image_url ? (
@@ -93,12 +114,27 @@ export function ProductCard({ product, onClick }) {
 }
 
 // Compact product row for tables
-export function ProductRow({ product, onClick }) {
+export function ProductRow({ product, onClick, selected = false, onToggleSelect = null }) {
   return (
     <tr
-      className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
+      className={cn(
+        "hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors",
+        selected && "bg-primary-50/40 dark:bg-primary-950/30"
+      )}
       onClick={onClick}
     >
+      {/* Checkbox */}
+      {onToggleSelect && (
+        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelect(product.id)}
+            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+          />
+        </td>
+      )}
+
       {/* Image */}
       <td className="px-4 py-3">
         <div className="w-12 h-12 rounded-lg bg-gray-100 dark:bg-gray-800 overflow-hidden">

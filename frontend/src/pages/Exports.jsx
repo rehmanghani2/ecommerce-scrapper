@@ -7,6 +7,9 @@ import {
   CodeBracketIcon,
   TrashIcon,
   FolderOpenIcon,
+  CloudArrowUpIcon,
+  CheckCircleIcon,
+  ExclamationCircleIcon,
 } from '@heroicons/react/24/outline'
 import { cn, formatFileSize, formatDate } from '@/utils/helpers'
 import {
@@ -17,8 +20,11 @@ import {
   EmptyState,
   PageLoader,
   ConfirmModal,
+  Badge,
 } from '@/components/Common'
 import exportService from '@/services/exportService'
+import integrationService from '@/services/integrationService'
+import { ExportSyncModal } from '@/components/DataViewer'
 import toast from 'react-hot-toast'
 
 const FORMAT_ICONS = {
@@ -36,11 +42,20 @@ const FORMAT_COLORS = {
 export default function Exports() {
   const queryClient = useQueryClient()
   const [deleteModal, setDeleteModal] = useState({ open: false, filename: null })
+  const [activeTab, setActiveTab] = useState('files') // 'files' or 'sync_logs'
+  const [syncModalOpen, setSyncModalOpen] = useState(false)
 
   // Fetch exports
   const { data: exports, isLoading } = useQuery({
     queryKey: ['exports'],
     queryFn: () => exportService.listExports(),
+  })
+
+  // Fetch sync logs
+  const { data: syncLogs, isLoading: loadingLogs } = useQuery({
+    queryKey: ['syncLogs'],
+    queryFn: () => integrationService.getSyncLogs(),
+    enabled: activeTab === 'sync_logs',
   })
 
   // Delete mutation
@@ -78,13 +93,50 @@ export default function Exports() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
             <ArrowDownTrayIcon className="w-8 h-8 text-primary-600" />
-            Exports
+            Exports & Store Sync
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Download your exported data files
+            Download your exported data files or sync directly into Shopify, WooCommerce, and Google Sheets
           </p>
         </div>
+
+        <Button
+          icon={CloudArrowUpIcon}
+          variant="primary"
+          onClick={() => setSyncModalOpen(true)}
+        >
+          1-Click Store Sync
+        </Button>
       </div>
+
+      {/* Subtabs */}
+      <div className="flex border-b border-gray-200 dark:border-gray-700 space-x-4">
+        <button
+          onClick={() => setActiveTab('files')}
+          className={cn(
+            'pb-3 text-sm font-semibold border-b-2 transition-all',
+            activeTab === 'files'
+              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+          )}
+        >
+          Exported Files ({exports?.length || 0})
+        </button>
+        <button
+          onClick={() => setActiveTab('sync_logs')}
+          className={cn(
+            'pb-3 text-sm font-semibold border-b-2 transition-all',
+            activeTab === 'sync_logs'
+              ? 'border-primary-600 text-primary-600 dark:text-primary-400'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+          )}
+        >
+          Store Sync History
+        </button>
+      </div>
+
+      {activeTab === 'files' ? (
+        <>
 
       {/* Exports List */}
       {isLoading ? (
@@ -166,6 +218,60 @@ export default function Exports() {
           </div>
         </Card>
       )}
+        </>
+      ) : (
+        /* TAB 2: STORE SYNC LOGS */
+        <>
+          {loadingLogs ? (
+            <PageLoader message="Loading sync history..." />
+          ) : !syncLogs || syncLogs.length === 0 ? (
+            <EmptyState
+              icon={CloudArrowUpIcon}
+              title="No store syncs recorded"
+              description="Use 1-Click Store Sync from the Products page or Job Details to push inventory to Shopify, WooCommerce, or Google Sheets."
+            />
+          ) : (
+            <Card padding="none">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-800">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Platform</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Target Store</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Synced Products</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {syncLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        <td className="px-4 py-3 font-semibold text-sm capitalize text-gray-900 dark:text-white">
+                          {log.platform.replace('_', ' ')}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 truncate max-w-xs">
+                          {log.target_name || '—'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge variant={log.status === 'success' ? 'success' : log.status === 'partial' ? 'warning' : 'danger'}>
+                            {log.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                          {log.success_count} synced / {log.items_count} total
+                        </td>
+                        <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                          {formatDate(log.created_at, 'PPp')}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </>
+      )}
 
       {/* Delete Confirmation */}
       <ConfirmModal
@@ -176,6 +282,12 @@ export default function Exports() {
         message={`Are you sure you want to delete "${deleteModal.filename}"? This action cannot be undone.`}
         confirmText="Delete"
         loading={deleteMutation.isPending}
+      />
+
+      {/* Store Sync Modal */}
+      <ExportSyncModal
+        isOpen={syncModalOpen}
+        onClose={() => setSyncModalOpen(false)}
       />
     </div>
   )

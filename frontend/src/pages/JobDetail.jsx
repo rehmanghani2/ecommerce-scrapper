@@ -7,6 +7,7 @@ import {
   CubeIcon,
   DocumentTextIcon,
   ArrowDownTrayIcon,
+  CloudArrowUpIcon,
 } from '@heroicons/react/24/outline'
 import { cn, formatDate, formatDuration, formatNumber, extractDomain } from '@/utils/helpers'
 import { useJob, useJobActions } from '@/hooks/useJobs'
@@ -24,7 +25,7 @@ import {
   UnderlineTabs,
 } from '@/components/Common'
 import { JobProgress, JobLogs, JobActions } from '@/components/Jobs'
-import { ProductCard, ExportButton } from '@/components/DataViewer'
+import { ProductCard, ExportButton, ExportSyncModal } from '@/components/DataViewer'
 
 export default function JobDetail() {
   const { jobId } = useParams()
@@ -241,6 +242,7 @@ function JobProducts({ jobId, onTotalFetched }) {
   const [products, setProducts] = useState([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [syncModalOpen, setSyncModalOpen] = useState(false)
 
   React.useEffect(() => {
     if (!jobId) return
@@ -284,8 +286,24 @@ function JobProducts({ jobId, onTotalFetched }) {
         <p className="text-sm text-gray-500 dark:text-gray-400">
           {total} product{total !== 1 ? 's' : ''} extracted
         </p>
-        <ExportButton jobId={jobId} />
+        <div className="flex items-center gap-2">
+          <Button
+            icon={CloudArrowUpIcon}
+            variant="primary"
+            onClick={() => setSyncModalOpen(true)}
+          >
+            1-Click Store Sync
+          </Button>
+          <ExportButton jobId={jobId} />
+        </div>
       </div>
+
+      <ExportSyncModal
+        isOpen={syncModalOpen}
+        onClose={() => setSyncModalOpen(false)}
+        jobId={jobId}
+        totalProductsCount={total}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {products.map((product, idx) => (

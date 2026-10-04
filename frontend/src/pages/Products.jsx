@@ -6,6 +6,9 @@ import {
   Squares2X2Icon,
   TableCellsIcon,
   ArrowDownTrayIcon,
+  CloudArrowUpIcon,
+  ArrowTrendingDownIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline'
 import { cn, formatNumber } from '@/utils/helpers'
 import {
@@ -17,15 +20,16 @@ import {
   Modal,
   ModalFooter,
 } from '@/components/Common'
-import { ProductCard, ProductRow, ProductFilters, ExportButton, PriceHistoryModal } from '@/components/DataViewer'
+import { ProductCard, ProductRow, ProductFilters, ExportButton, PriceHistoryModal, ExportSyncModal } from '@/components/DataViewer'
 import { apiGet } from '@/services/api'
-import { ArrowTrendingDownIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 
 export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [viewMode, setViewMode] = useState('grid')
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [historyProduct, setHistoryProduct] = useState(null)
+  const [selectedProductIds, setSelectedProductIds] = useState([])
+  const [isExportSyncModalOpen, setIsExportSyncModalOpen] = useState(false)
 
   // Parse filters from URL
   const filters = {
@@ -79,6 +83,20 @@ export default function Products() {
     const params = new URLSearchParams(searchParams)
     params.set('page', newPage.toString())
     setSearchParams(params)
+  }
+
+  const handleToggleSelect = (id) => {
+    setSelectedProductIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    )
+  }
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      setSelectedProductIds(products.map((p) => p.id))
+    } else {
+      setSelectedProductIds([])
+    }
   }
 
   return (
@@ -139,8 +157,14 @@ export default function Products() {
             </button>
           </div>
           
-          <Button icon={ArrowDownTrayIcon} variant="secondary">
-            Export All
+          <Button
+            icon={CloudArrowUpIcon}
+            variant={selectedProductIds.length > 0 ? 'primary' : 'secondary'}
+            onClick={() => setIsExportSyncModalOpen(true)}
+          >
+            {selectedProductIds.length > 0
+              ? `Export & Sync (${selectedProductIds.length})`
+              : 'Export & Sync'}
           </Button>
         </div>
       </div>
@@ -181,6 +205,8 @@ export default function Products() {
               key={product.id}
               product={product}
               onClick={() => setSelectedProduct(product)}
+              selected={selectedProductIds.includes(product.id)}
+              onToggleSelect={handleToggleSelect}
             />
           ))}
         </div>
@@ -190,6 +216,14 @@ export default function Products() {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
+                  <th className="px-3 py-3 text-left w-10">
+                    <input
+                      type="checkbox"
+                      checked={products.length > 0 && selectedProductIds.length === products.length}
+                      onChange={(e) => handleSelectAll(e.target.checked)}
+                      className="rounded border-gray-300 text-primary-600 focus:ring-primary-500 cursor-pointer"
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Image
                   </th>
@@ -219,6 +253,8 @@ export default function Products() {
                     key={product.id}
                     product={product}
                     onClick={() => setSelectedProduct(product)}
+                    selected={selectedProductIds.includes(product.id)}
+                    onToggleSelect={handleToggleSelect}
                   />
                 ))}
               </tbody>
@@ -244,6 +280,10 @@ export default function Products() {
         isOpen={!!selectedProduct}
         onClose={() => setSelectedProduct(null)}
         onOpenHistory={(p) => setHistoryProduct(p)}
+        onOpenSync={(p) => {
+          setSelectedProductIds([p.id])
+          setIsExportSyncModalOpen(true)
+        }}
       />
 
       {/* Price History & Trend Modal */}
@@ -252,11 +292,19 @@ export default function Products() {
         isOpen={!!historyProduct}
         onClose={() => setHistoryProduct(null)}
       />
+
+      {/* 1-Click Export & Sync Modal */}
+      <ExportSyncModal
+        isOpen={isExportSyncModalOpen}
+        onClose={() => setIsExportSyncModalOpen(false)}
+        productIds={selectedProductIds}
+        totalProductsCount={totalProducts}
+      />
     </div>
   )
 }
 
-function ProductDetailModal({ product, isOpen, onClose, onOpenHistory }) {
+function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenSync }) {
   if (!product) return null
 
   return (
@@ -355,8 +403,20 @@ function ProductDetailModal({ product, isOpen, onClose, onOpenHistory }) {
           <ChartBarIcon className="w-4 h-4 mr-1.5 text-primary-600" />
           Price History & Trends
         </Button>
+        {onOpenSync && (
+          <Button
+            variant="primary"
+            onClick={() => {
+              onClose()
+              onOpenSync(product)
+            }}
+          >
+            <CloudArrowUpIcon className="w-4 h-4 mr-1.5" />
+            Export & Sync
+          </Button>
+        )}
         <a href={product.url} target="_blank" rel="noopener noreferrer">
-          <Button>View on Website</Button>
+          <Button variant="outline">View on Website</Button>
         </a>
       </ModalFooter>
     </Modal>

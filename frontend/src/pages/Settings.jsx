@@ -8,6 +8,10 @@ import {
   GlobeAltIcon,
   PaintBrushIcon,
   ShieldCheckIcon,
+  CloudArrowUpIcon,
+  CheckCircleIcon,
+  ExclamationCircleIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/helpers'
@@ -20,7 +24,9 @@ import {
   Select,
   Alert,
   UnderlineTabs,
+  Badge,
 } from '@/components/Common'
+import integrationService from '@/services/integrationService'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -51,6 +57,12 @@ export default function Settings() {
       label: 'Scraping',
       icon: GlobeAltIcon,
       content: <ScrapingSettings />,
+    },
+    {
+      key: 'integrations',
+      label: 'Store Integrations',
+      icon: CloudArrowUpIcon,
+      content: <IntegrationsSettings />,
     },
     {
       key: 'appearance',
@@ -432,6 +444,357 @@ function ToggleItem({ label, description, checked, onChange }) {
           )}
         />
       </button>
+    </div>
+  )
+}
+
+function IntegrationsSettings() {
+  const [configs, setConfigs] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  // Shopify state
+  const [shopify, setShopify] = useState({ shop_url: '', access_token: '' })
+  const [testingShopify, setTestingShopify] = useState(false)
+  const [shopifyTestResult, setShopifyTestResult] = useState(null)
+
+  // WooCommerce state
+  const [wc, setWc] = useState({ store_url: '', consumer_key: '', consumer_secret: '' })
+  const [testingWc, setTestingWc] = useState(false)
+  const [wcTestResult, setWcTestResult] = useState(null)
+
+  // Google Sheets state
+  const [sheets, setSheets] = useState({ webhook_url: '' })
+  const [testingSheets, setTestingSheets] = useState(false)
+  const [sheetsTestResult, setSheetsTestResult] = useState(null)
+
+  useEffect(() => {
+    loadConfigs()
+  }, [])
+
+  const loadConfigs = async () => {
+    try {
+      setLoading(true)
+      const data = await integrationService.getConfigs()
+      setConfigs(data || [])
+      
+      const shopifyCfg = (data || []).find((c) => c.platform === 'shopify')
+      if (shopifyCfg?.masked_credentials) {
+        setShopify({
+          shop_url: shopifyCfg.masked_credentials.shop_url || '',
+          access_token: shopifyCfg.masked_credentials.access_token || '',
+        })
+      }
+
+      const wcCfg = (data || []).find((c) => c.platform === 'woocommerce')
+      if (wcCfg?.masked_credentials) {
+        setWc({
+          store_url: wcCfg.masked_credentials.store_url || '',
+          consumer_key: wcCfg.masked_credentials.consumer_key || '',
+          consumer_secret: wcCfg.masked_credentials.consumer_secret || '',
+        })
+      }
+
+      const sheetsCfg = (data || []).find((c) => c.platform === 'google_sheets')
+      if (sheetsCfg?.masked_credentials) {
+        setSheets({
+          webhook_url: sheetsCfg.masked_credentials.webhook_url || '',
+        })
+      }
+    } catch (err) {
+      console.error('Failed to load configs', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Shopify Handlers
+  const handleTestShopify = async () => {
+    setTestingShopify(true)
+    setShopifyTestResult(null)
+    try {
+      const res = await integrationService.testConnection('shopify', shopify)
+      setShopifyTestResult(res)
+      if (res.success) toast.success('Shopify connection verified!')
+      else toast.error(res.message)
+    } catch (err) {
+      const msg = err.response?.data?.detail || err.message
+      setShopifyTestResult({ success: false, message: msg })
+      toast.error(msg)
+    } finally {
+      setTestingShopify(false)
+    }
+  }
+
+  const handleSaveShopify = async () => {
+    try {
+      await integrationService.saveConfig({
+        platform: 'shopify',
+        name: shopify.shop_url || 'Default Shopify Store',
+        credentials: shopify,
+        is_active: true,
+      })
+      toast.success('Shopify settings saved!')
+      loadConfigs()
+    } catch (err) {
+      toast.error('Failed to save Shopify settings: ' + err.message)
+    }
+  }
+
+  // WooCommerce Handlers
+  const handleTestWc = async () => {
+    setTestingWc(true)
+    setWcTestResult(null)
+    try {
+      const res = await integrationService.testConnection('woocommerce', wc)
+      setWcTestResult(res)
+      if (res.success) toast.success('WooCommerce connection verified!')
+      else toast.error(res.message)
+    } catch (err) {
+      const msg = err.response?.data?.detail || err.message
+      setWcTestResult({ success: false, message: msg })
+      toast.error(msg)
+    } finally {
+      setTestingWc(false)
+    }
+  }
+
+  const handleSaveWc = async () => {
+    try {
+      await integrationService.saveConfig({
+        platform: 'woocommerce',
+        name: wc.store_url || 'Default WooCommerce Store',
+        credentials: wc,
+        is_active: true,
+      })
+      toast.success('WooCommerce settings saved!')
+      loadConfigs()
+    } catch (err) {
+      toast.error('Failed to save WooCommerce settings: ' + err.message)
+    }
+  }
+
+  // Google Sheets Handlers
+  const handleTestSheets = async () => {
+    setTestingSheets(true)
+    setSheetsTestResult(null)
+    try {
+      const res = await integrationService.testConnection('google_sheets', sheets)
+      setSheetsTestResult(res)
+      if (res.success) toast.success('Google Sheets webhook verified!')
+      else toast.error(res.message)
+    } catch (err) {
+      const msg = err.response?.data?.detail || err.message
+      setSheetsTestResult({ success: false, message: msg })
+      toast.error(msg)
+    } finally {
+      setTestingSheets(false)
+    }
+  }
+
+  const handleSaveSheets = async () => {
+    try {
+      await integrationService.saveConfig({
+        platform: 'google_sheets',
+        name: 'Google Sheets Live Sync',
+        credentials: sheets,
+        is_active: true,
+      })
+      toast.success('Google Sheets webhook saved!')
+      loadConfigs()
+    } catch (err) {
+      toast.error('Failed to save Google Sheets settings: ' + err.message)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Introduction Banner */}
+      <div className="bg-primary-50 dark:bg-primary-950/40 border border-primary-200 dark:border-primary-800 rounded-xl p-4">
+        <h3 className="font-semibold text-primary-900 dark:text-primary-100 flex items-center gap-2">
+          <CloudArrowUpIcon className="w-5 h-5 text-primary-600" />
+          1-Click Store & Cloud Integrations
+        </h3>
+        <p className="text-xs text-primary-700 dark:text-primary-300 mt-1">
+          Connect your online stores and cloud spreadsheets to automatically sync scraped products into your live inventory with 1 click.
+        </p>
+      </div>
+
+      {/* 1. Shopify Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Shopify Store Integration</CardTitle>
+            <Badge variant="primary">Shopify Admin REST API</Badge>
+          </div>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Push products directly into your Shopify store with images, variants, compare-at pricing, and tags.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Shop Domain or Handle"
+              placeholder="my-store.myshopify.com"
+              value={shopify.shop_url}
+              onChange={(e) => setShopify({ ...shopify, shop_url: e.target.value })}
+              hint="Format: store-name.myshopify.com"
+            />
+            <Input
+              label="Admin API Access Token"
+              type="password"
+              placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxx"
+              value={shopify.access_token}
+              onChange={(e) => setShopify({ ...shopify, access_token: e.target.value })}
+              hint="From Shopify Admin → Settings → Apps → App Development"
+            />
+          </div>
+
+          {shopifyTestResult && (
+            <Alert
+              variant={shopifyTestResult.success ? 'success' : 'danger'}
+              title={shopifyTestResult.message}
+            >
+              {shopifyTestResult.details && (
+                <div className="text-xs mt-1 space-y-0.5">
+                  <p>Store Name: {shopifyTestResult.details.name}</p>
+                  <p>Currency: {shopifyTestResult.details.currency}</p>
+                </div>
+              )}
+            </Alert>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              disabled={testingShopify || !shopify.shop_url || !shopify.access_token}
+              onClick={handleTestShopify}
+            >
+              {testingShopify ? 'Testing...' : 'Test Connection'}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!shopify.shop_url || !shopify.access_token}
+              onClick={handleSaveShopify}
+            >
+              Save Shopify Config
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* 2. WooCommerce Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>WooCommerce Integration</CardTitle>
+            <Badge variant="secondary">WooCommerce REST API v3</Badge>
+          </div>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Publish products to your WordPress/WooCommerce site with categories, stock tracking, and sale pricing.
+          </p>
+          <Input
+            label="WordPress Store URL"
+            placeholder="https://yourdomain.com"
+            value={wc.store_url}
+            onChange={(e) => setWc({ ...wc, store_url: e.target.value })}
+            hint="Full URL with https://"
+          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Consumer Key"
+              placeholder="ck_xxxxxxxxxxxxxxxxxxxxxxxx"
+              value={wc.consumer_key}
+              onChange={(e) => setWc({ ...wc, consumer_key: e.target.value })}
+              hint="From WooCommerce → Settings → Advanced → REST API"
+            />
+            <Input
+              label="Consumer Secret"
+              type="password"
+              placeholder="cs_xxxxxxxxxxxxxxxxxxxxxxxx"
+              value={wc.consumer_secret}
+              onChange={(e) => setWc({ ...wc, consumer_secret: e.target.value })}
+            />
+          </div>
+
+          {wcTestResult && (
+            <Alert
+              variant={wcTestResult.success ? 'success' : 'danger'}
+              title={wcTestResult.message}
+            >
+              {wcTestResult.details && (
+                <div className="text-xs mt-1">
+                  <p>Site: {wcTestResult.details.site_url}</p>
+                </div>
+              )}
+            </Alert>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              disabled={testingWc || !wc.store_url || !wc.consumer_key || !wc.consumer_secret}
+              onClick={handleTestWc}
+            >
+              {testingWc ? 'Testing...' : 'Test Connection'}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!wc.store_url || !wc.consumer_key || !wc.consumer_secret}
+              onClick={handleSaveWc}
+            >
+              Save WooCommerce Config
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* 3. Google Sheets Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Google Sheets Webhook Sync</CardTitle>
+            <Badge variant="warning">Apps Script / Webhook</Badge>
+          </div>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Push scraped products in real time into Google Sheets using Google Apps Script Web App or Zapier/Make webhooks.
+          </p>
+          <Input
+            label="Webhook or Google Apps Script URL"
+            placeholder="https://script.google.com/macros/s/AKfycbx.../exec"
+            value={sheets.webhook_url}
+            onChange={(e) => setSheets({ webhook_url: e.target.value })}
+            hint="Supports Google Apps Script Web App (doPost), Make, or Zapier webhooks"
+          />
+
+          {sheetsTestResult && (
+            <Alert
+              variant={sheetsTestResult.success ? 'success' : 'danger'}
+              title={sheetsTestResult.message}
+            />
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              disabled={testingSheets || !sheets.webhook_url}
+              onClick={handleTestSheets}
+            >
+              {testingSheets ? 'Testing...' : 'Test Webhook'}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!sheets.webhook_url}
+              onClick={handleSaveSheets}
+            >
+              Save Webhook Config
+            </Button>
+          </div>
+        </div>
+      </Card>
     </div>
   )
 }
