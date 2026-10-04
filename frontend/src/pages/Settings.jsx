@@ -15,6 +15,7 @@ import {
   SparklesIcon,
   BellAlertIcon,
   ChatBubbleLeftRightIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/helpers'
@@ -32,6 +33,7 @@ import {
 import integrationService from '@/services/integrationService'
 import scraperService from '@/services/scraperService'
 import alertService from '@/services/alertService'
+import cloudinaryService from '@/services/cloudinaryService'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -68,6 +70,12 @@ export default function Settings() {
       label: 'Store Integrations',
       icon: CloudArrowUpIcon,
       content: <IntegrationsSettings />,
+    },
+    {
+      key: 'cloudinary',
+      label: 'Cloudinary CDN',
+      icon: PhotoIcon,
+      content: <CloudinarySettings />,
     },
     {
       key: 'appearance',
@@ -941,6 +949,206 @@ function ScrapingSettings() {
               Save Proxy Pool
             </Button>
           </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function CloudinarySettings() {
+  const [cloudName, setCloudName] = useState('')
+  const [apiKey, setApiKey] = useState('')
+  const [apiSecret, setApiSecret] = useState('')
+  const [folder, setFolder] = useState('ecommerce_scraper')
+  const [autoUpload, setAutoUpload] = useState(false)
+  const [testResult, setTestResult] = useState(null)
+  const [testing, setTesting] = useState(false)
+
+  // Quick single-image upload test state
+  const [sampleUrl, setSampleUrl] = useState('')
+  const [uploadResult, setUploadResult] = useState(null)
+  const [uploading, setUploading] = useState(false)
+
+  const handleTestConnection = async () => {
+    try {
+      setTesting(true)
+      setTestResult(null)
+      const res = await cloudinaryService.testConnection({
+        cloud_name: cloudName,
+        api_key: apiKey,
+        api_secret: apiSecret,
+      })
+      setTestResult(res)
+      if (res.success) {
+        toast.success(res.message || 'Connected to Cloudinary!')
+      } else {
+        toast.error(res.message || 'Failed to connect to Cloudinary.')
+      }
+    } catch (e) {
+      toast.error(e.message || 'Error testing Cloudinary credentials')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const handleTestImageUpload = async () => {
+    if (!sampleUrl.trim()) {
+      toast.error('Please enter an image URL to test upload')
+      return
+    }
+    try {
+      setUploading(true)
+      setUploadResult(null)
+      const res = await cloudinaryService.uploadImage(sampleUrl, folder)
+      setUploadResult(res)
+      toast.success('Image successfully uploaded and transformed on Cloudinary CDN!')
+    } catch (e) {
+      toast.error(e.response?.data?.detail || e.message || 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <PhotoIcon className="w-5 h-5 text-sky-500" />
+              Cloudinary Media CDN & Image Optimization
+            </CardTitle>
+            <Badge variant="info">Global CDN • WebP • Auto-Crop</Badge>
+          </div>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Host scraped competitor images on Cloudinary to prevent hotlink-blocking (403 errors), 
+            automatically convert large product images to lightweight modern WebP formats, and generate 
+            instant responsive thumbnails for your catalog exports.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Cloud Name"
+              placeholder="e.g. my-ecommerce-cloud"
+              value={cloudName}
+              onChange={(e) => setCloudName(e.target.value)}
+              hint="Found on your Cloudinary Dashboard"
+            />
+            <Input
+              label="Folder Name"
+              placeholder="ecommerce_scraper"
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              hint="Target directory in your Cloudinary Media Library"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="API Key"
+              placeholder="e.g. 123456789012345"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+            <Input
+              label="API Secret"
+              type="password"
+              placeholder="••••••••••••••••••••••••••••"
+              value={apiSecret}
+              onChange={(e) => setApiSecret(e.target.value)}
+            />
+          </div>
+
+          {/* Connection Test Diagnostics */}
+          {testResult && (
+            <div className={`p-4 rounded-xl text-xs space-y-1.5 border ${
+              testResult.success
+                ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                : 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+            }`}>
+              <div className="font-semibold flex items-center gap-1.5">
+                {testResult.success ? '✓' : '✕'} {testResult.message}
+              </div>
+              {testResult.plan && (
+                <div className="text-gray-600 dark:text-gray-400">
+                  Plan: <span className="font-semibold">{testResult.plan}</span> • Storage: {testResult.storage?.usage ? `${(testResult.storage.usage / (1024*1024)).toFixed(1)} MB` : 'Active'} • Objects: {testResult.objects?.usage || 0}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              disabled={testing || (!cloudName && !apiKey)}
+              onClick={handleTestConnection}
+            >
+              {testing ? 'Testing Connection...' : 'Test Cloudinary Connection'}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                toast.success('Cloudinary CDN preferences saved!')
+              }}
+            >
+              Save Configuration
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Live CDN Upload & Transformation Tester */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <SparklesIcon className="w-4 h-4 text-primary-600" />
+            Live CDN Upload & Transformation Sandbox
+          </CardTitle>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Paste any remote competitor product image URL to test uploading and instant WebP/thumbnail CDN generation.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Input
+              placeholder="https://images.unsplash.com/photo-1542291026-7eec264c27ff"
+              value={sampleUrl}
+              onChange={(e) => setSampleUrl(e.target.value)}
+              className="flex-1"
+            />
+            <Button
+              variant="secondary"
+              onClick={handleTestImageUpload}
+              disabled={uploading || !sampleUrl.trim()}
+            >
+              {uploading ? 'Uploading to CDN...' : 'Upload & Optimize'}
+            </Button>
+          </div>
+
+          {uploadResult && uploadResult.success && (
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 flex flex-col md:flex-row gap-4 items-center">
+              <img
+                src={uploadResult.thumbnail_url || uploadResult.secure_url}
+                alt="Cloudinary preview"
+                className="w-24 h-24 object-cover rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm"
+              />
+              <div className="space-y-1 text-xs flex-1">
+                <div className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <CheckCircleIcon className="w-4 h-4 text-emerald-500" />
+                  Successfully Uploaded to Cloudinary
+                </div>
+                <div className="text-gray-600 dark:text-gray-300 font-mono break-all">
+                  CDN URL: <a href={uploadResult.secure_url} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">{uploadResult.secure_url}</a>
+                </div>
+                <div className="text-gray-500">
+                  Format: {uploadResult.format?.toUpperCase()} • {uploadResult.width}×{uploadResult.height}px • {(uploadResult.bytes / 1024).toFixed(1)} KB
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
     </div>

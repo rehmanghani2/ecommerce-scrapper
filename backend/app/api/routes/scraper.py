@@ -729,6 +729,21 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                                     image_url=data.get("image_url"),
                                     source_domain=domain,
                                 )
+
+                                # Optional Cloudinary CDN auto-upload
+                                if settings.CLOUDINARY_AUTO_UPLOAD and p.image_url:
+                                    try:
+                                        from app.services.cloudinary_service import cloudinary_service
+                                        if cloudinary_service.is_configured():
+                                            c_res = await cloudinary_service.upload_image_url(p.image_url)
+                                            if c_res.get("success"):
+                                                p.cloudinary_url = c_res.get("secure_url")
+                                                p.cloudinary_public_id = c_res.get("public_id")
+                                                if c_res.get("thumbnail_url"):
+                                                    p.thumbnail_url = c_res.get("thumbnail_url")
+                                    except Exception as c_err:
+                                        logger.debug(f"Cloudinary auto-upload error: {c_err}")
+
                                 save_db.add(p)
                                 await save_db.flush()
 

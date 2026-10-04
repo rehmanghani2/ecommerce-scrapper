@@ -54,6 +54,8 @@ class Product(Base):
     url = Column(Text, nullable=False)
     image_url = Column(Text, nullable=True)
     thumbnail_url = Column(Text, nullable=True)
+    cloudinary_url = Column(Text, nullable=True)
+    cloudinary_public_id = Column(String(255), nullable=True)
     
     # Categorization
     category = Column(String(255), nullable=True)
@@ -137,6 +139,8 @@ class Product(Base):
             "stock_quantity": self.stock_quantity,
             "url": self.url,
             "image_url": self.image_url,
+            "cloudinary_url": self.cloudinary_url,
+            "cloudinary_public_id": self.cloudinary_public_id,
             "category": self.category,
             "subcategory": self.subcategory,
             "category_path": self.category_path,
@@ -167,6 +171,7 @@ class Product(Base):
             "Stock Quantity": self.stock_quantity or "",
             "URL": self.url,
             "Image URL": self.image_url,
+            "Cloudinary URL": self.cloudinary_url or "",
             "Category": self.category,
             "Subcategory": self.subcategory,
             "Category Path": self.category_path,

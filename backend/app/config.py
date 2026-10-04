@@ -86,6 +86,14 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = Field(default=None, env="GEMINI_API_KEY")
     GEMINI_MODEL: str = Field(default="gemini-2.5-flash", env="GEMINI_MODEL")
     
+    # Cloudinary Image CDN Settings
+    CLOUDINARY_CLOUD_NAME: Optional[str] = Field(default=None, env="CLOUDINARY_CLOUD_NAME")
+    CLOUDINARY_API_KEY: Optional[str] = Field(default=None, env="CLOUDINARY_API_KEY")
+    CLOUDINARY_API_SECRET: Optional[str] = Field(default=None, env="CLOUDINARY_API_SECRET")
+    CLOUDINARY_URL: Optional[str] = Field(default=None, env="CLOUDINARY_URL")
+    CLOUDINARY_FOLDER: str = Field(default="ecommerce_scraper", env="CLOUDINARY_FOLDER")
+    CLOUDINARY_AUTO_UPLOAD: bool = Field(default=False, env="CLOUDINARY_AUTO_UPLOAD")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
