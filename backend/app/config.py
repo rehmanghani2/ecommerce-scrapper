@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     # or wildcard: "*"
     ALLOWED_ORIGINS: str = "https://ecommerce-scrapper-sigma.vercel.app,http://localhost:3000,http://localhost:5173"
     
+    # AI Extraction Settings (Gemini)
+    GEMINI_API_KEY: Optional[str] = Field(default=None, env="GEMINI_API_KEY")
+    GEMINI_MODEL: str = Field(default="gemini-1.5-flash", env="GEMINI_MODEL")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

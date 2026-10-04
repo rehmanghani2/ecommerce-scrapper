@@ -210,6 +210,36 @@ export function VisualSelectorPickerModal({
     }
   }
 
+  // AI Suggestion Handler
+  const [aiLoading, setAiLoading] = useState(false)
+
+  const handleAISuggest = async () => {
+    if (!activeUrl) {
+      toast.error('Please enter a target URL first')
+      return
+    }
+    setAiLoading(true)
+    try {
+      const res = await scraperService.aiSuggestSelectors({ url: activeUrl })
+      if (res.success && res.selectors) {
+        setSelectors((prev) => ({
+          ...prev,
+          ...res.selectors,
+        }))
+        toast.success('Gemini AI detected optimal CSS selectors!')
+        if (res.selectors.product_card) {
+          handleHighlight(res.selectors.product_card)
+        }
+      } else {
+        toast.error(res.error || 'AI could not detect selectors. Make sure Gemini API Key is configured.')
+      }
+    } catch (e) {
+      toast.error('AI Suggestion failed: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   // Apply selectors back to ScraperForm
   const handleApply = () => {
     if (onApplySelectors) {
@@ -291,6 +321,41 @@ export function VisualSelectorPickerModal({
       <div className="flex-1 flex overflow-hidden">
         {/* Left Control Panel */}
         <div className="w-80 sm:w-96 bg-gray-900 border-r border-gray-800 flex flex-col overflow-y-auto p-4 space-y-4 text-white">
+          {/* AI One-Click Auto-Detect Card */}
+          <div className="p-3 rounded-lg bg-gradient-to-br from-purple-900/40 to-indigo-900/40 border border-purple-700/50">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-bold text-purple-200 flex items-center gap-1.5">
+                <SparklesIcon className="w-4 h-4 text-purple-400" />
+                Gemini AI Auto-Detect
+              </span>
+              <span className="text-[10px] font-semibold bg-purple-800/80 text-purple-200 px-1.5 py-0.5 rounded border border-purple-600/60">
+                AI Agent
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-300 mb-2">
+              Let Google Gemini inspect the page DOM and reverse-engineer CSS selectors automatically.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={aiLoading}
+              onClick={handleAISuggest}
+              className="w-full bg-purple-950/60 hover:bg-purple-900/60 border-purple-600/80 text-purple-200 hover:text-white text-xs py-1.5"
+            >
+              {aiLoading ? (
+                <>
+                  <Spinner size="xs" className="mr-1.5" />
+                  Analyzing DOM with Gemini...
+                </>
+              ) : (
+                <>
+                  <SparklesIcon className="w-3.5 h-3.5 mr-1.5 text-purple-300" />
+                  Auto-Detect with AI
+                </>
+              )}
+            </Button>
+          </div>
+
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">
               Active Field Target

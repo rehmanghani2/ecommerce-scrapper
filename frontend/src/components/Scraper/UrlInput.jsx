@@ -7,6 +7,8 @@ export function UrlInput({
   value,
   onChange,
   onAnalyze,
+  onAIExtract,
+  aiExtractLoading = false,
   onOpenVisualPicker,
   loading = false,
   error,
@@ -75,6 +77,18 @@ export function UrlInput({
               className="px-3 text-xs border-primary-500 text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-950/40"
             >
               🎨 Visual Picker
+            </Button>
+          )}
+          {onAIExtract && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onAIExtract}
+              disabled={!value || !isValidUrl(value) || aiExtractLoading}
+              loading={aiExtractLoading}
+              className="px-3 text-xs border-purple-500 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+            >
+              ✨ AI Extract
             </Button>
           )}
           <Button

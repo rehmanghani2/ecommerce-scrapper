@@ -5,9 +5,10 @@ import {
   TrashIcon,
   CheckCircleIcon,
   XCircleIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { cn } from '@/utils/helpers'
-import { Card, CardHeader, CardTitle, Button, Input, Badge } from '@/components/Common'
+import { Card, CardHeader, CardTitle, Button, Input, Badge, Spinner } from '@/components/Common'
 
 const SELECTOR_PRESETS = {
   product_card: [
@@ -51,6 +52,8 @@ export function SelectorBuilder({
   testResults = {},
   onTest,
   onOpenVisualPicker,
+  onAISuggest,
+  aiLoading = false,
   loading = false,
 }) {
   const [activeField, setActiveField] = useState(null)
@@ -90,16 +93,39 @@ export function SelectorBuilder({
             <CodeBracketIcon className="w-5 h-5" />
             CSS Selectors
           </CardTitle>
-          {onOpenVisualPicker && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onOpenVisualPicker}
-              className="text-xs border-primary-500 text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-950/40"
-            >
-              🎨 Point-and-Click Visual Studio
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {onAISuggest && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onAISuggest}
+                disabled={aiLoading}
+                className="text-xs border-purple-500 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/40"
+              >
+                {aiLoading ? (
+                  <>
+                    <Spinner size="xs" className="mr-1" />
+                    AI Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <SparklesIcon className="w-3.5 h-3.5 mr-1 text-purple-500" />
+                    AI Suggest
+                  </>
+                )}
+              </Button>
+            )}
+            {onOpenVisualPicker && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onOpenVisualPicker}
+                className="text-xs border-primary-500 text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-950/40"
+              >
+                🎨 Visual Studio
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       

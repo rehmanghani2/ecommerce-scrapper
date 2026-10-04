@@ -12,6 +12,7 @@ import {
   CheckCircleIcon,
   ExclamationCircleIcon,
   ArrowPathIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/helpers'
@@ -467,6 +468,11 @@ function IntegrationsSettings() {
   const [testingSheets, setTestingSheets] = useState(false)
   const [sheetsTestResult, setSheetsTestResult] = useState(null)
 
+  // Gemini AI state
+  const [gemini, setGemini] = useState({ api_key: '' })
+  const [testingGemini, setTestingGemini] = useState(false)
+  const [geminiTestResult, setGeminiTestResult] = useState(null)
+
   useEffect(() => {
     loadConfigs()
   }, [])
@@ -498,6 +504,13 @@ function IntegrationsSettings() {
       if (sheetsCfg?.masked_credentials) {
         setSheets({
           webhook_url: sheetsCfg.masked_credentials.webhook_url || '',
+        })
+      }
+
+      const geminiCfg = (data || []).find((c) => c.platform === 'gemini' || c.platform === 'google_gemini')
+      if (geminiCfg?.masked_credentials) {
+        setGemini({
+          api_key: geminiCfg.masked_credentials.api_key || '',
         })
       }
     } catch (err) {
@@ -603,6 +616,39 @@ function IntegrationsSettings() {
       loadConfigs()
     } catch (err) {
       toast.error('Failed to save Google Sheets settings: ' + err.message)
+    }
+  }
+
+  // Gemini Handlers
+  const handleTestGemini = async () => {
+    setTestingGemini(true)
+    setGeminiTestResult(null)
+    try {
+      const res = await integrationService.testConnection('gemini', gemini)
+      setGeminiTestResult(res)
+      if (res.success) toast.success('Google Gemini connection verified!')
+      else toast.error(res.message)
+    } catch (err) {
+      const msg = err.response?.data?.detail || err.message
+      setGeminiTestResult({ success: false, message: msg })
+      toast.error(msg)
+    } finally {
+      setTestingGemini(false)
+    }
+  }
+
+  const handleSaveGemini = async () => {
+    try {
+      await integrationService.saveConfig({
+        platform: 'gemini',
+        name: 'Google Gemini AI Engine',
+        credentials: gemini,
+        is_active: true,
+      })
+      toast.success('Google Gemini API configuration saved!')
+      loadConfigs()
+    } catch (err) {
+      toast.error('Failed to save Gemini settings: ' + err.message)
     }
   }
 
@@ -791,6 +837,58 @@ function IntegrationsSettings() {
               onClick={handleSaveSheets}
             >
               Save Webhook Config
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* 4. Google Gemini AI Engine Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <SparklesIcon className="w-5 h-5 text-purple-500" />
+              Google Gemini AI Engine
+            </CardTitle>
+            <Badge variant="primary" className="bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-300">
+              Zero-Shot LLM Extraction
+            </Badge>
+          </div>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Powers zero-shot e-commerce product extraction and AI reverse-engineering of CSS selectors for complex, custom, or obfuscated storefronts.
+          </p>
+          <Input
+            label="Google Gemini API Key"
+            type="password"
+            placeholder="AIzaSy..."
+            value={gemini.api_key}
+            onChange={(e) => setGemini({ api_key: e.target.value })}
+            hint="Get an API key for free from Google AI Studio (aistudio.google.com)"
+          />
+
+          {geminiTestResult && (
+            <Alert
+              variant={geminiTestResult.success ? 'success' : 'danger'}
+              title={geminiTestResult.message}
+            />
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              disabled={testingGemini || !gemini.api_key}
+              onClick={handleTestGemini}
+            >
+              {testingGemini ? 'Testing Gemini API...' : 'Test Gemini Connection'}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!gemini.api_key}
+              onClick={handleSaveGemini}
+            >
+              Save Gemini Config
             </Button>
           </div>
         </div>

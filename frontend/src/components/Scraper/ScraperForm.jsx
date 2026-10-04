@@ -84,6 +84,51 @@ export function ScraperForm() {
     },
   })
 
+  const aiExtractMutation = useMutation({
+    mutationFn: () => scraperService.aiExtractProducts({ url }),
+    onSuccess: (data) => {
+      if (data.success && data.products) {
+        setPreviewData({
+          platform: 'AI Zero-Shot (Gemini)',
+          confidence: 0.95,
+          sample_products: data.products.map((p) => ({
+            name: p.name,
+            price: p.price != null ? `${p.currency || '$'}${p.price}` : null,
+            image: p.image_url,
+            url: p.url,
+            brand: p.brand,
+            category: p.category,
+          })),
+        })
+        toast.success(`Gemini AI extracted ${data.products.length} products!`)
+      } else {
+        toast.error(data.error || 'AI extraction returned no products')
+      }
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || error.message || 'AI extraction failed')
+    },
+  })
+
+  const aiSuggestMutation = useMutation({
+    mutationFn: () => scraperService.aiSuggestSelectors({ url }),
+    onSuccess: (data) => {
+      if (data.success && data.selectors) {
+        setCustomSelectors((prev) => ({
+          ...prev,
+          ...data.selectors,
+        }))
+        setShowAdvanced(true)
+        toast.success('Gemini AI detected optimal CSS selectors!')
+      } else {
+        toast.error(data.error || 'AI could not detect selectors')
+      }
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || error.message || 'AI selector suggestion failed')
+    },
+  })
+
   const startScrapingMutation = useMutation({
     mutationFn: () => scraperService.startScraping(url, jobName, {
       ...config,
@@ -125,6 +170,8 @@ export function ScraperForm() {
             value={url}
             onChange={setUrl}
             onAnalyze={() => analyzeMutation.mutate()}
+            onAIExtract={() => aiExtractMutation.mutate()}
+            aiExtractLoading={aiExtractMutation.isPending}
             onOpenVisualPicker={() => setVisualPickerOpen(true)}
             loading={analyzeMutation.isPending}
             error={analyzeMutation.error?.message}
@@ -250,6 +297,8 @@ export function ScraperForm() {
                   onChange={setCustomSelectors}
                   testResults={testResults}
                   onTest={() => testSelectorsMutation.mutate()}
+                  onAISuggest={() => aiSuggestMutation.mutate()}
+                  aiLoading={aiSuggestMutation.isPending}
                   onOpenVisualPicker={() => setVisualPickerOpen(true)}
                   loading={testSelectorsMutation.isPending}
                 />
@@ -275,8 +324,8 @@ export function ScraperForm() {
       <div>
         <PreviewPanel
           data={previewData}
-          loading={analyzeMutation.isPending}
-          error={analyzeMutation.error?.message}
+          loading={analyzeMutation.isPending || aiExtractMutation.isPending}
+          error={analyzeMutation.error?.message || aiExtractMutation.error?.message}
         />
       </div>
 

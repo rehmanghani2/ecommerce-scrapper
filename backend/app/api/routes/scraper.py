@@ -19,6 +19,7 @@ from app.schemas.scraper_schema import (
 )
 from app.core.pattern_detector import PatternDetector
 from app.services.visual_picker_service import visual_picker_service
+from app.services.ai_extractor_service import ai_extractor_service
 
 
 router = APIRouter()
@@ -247,6 +248,100 @@ async def test_selectors(
             status_code=500,
             detail=f"Failed to test selectors: {str(e)}"
         )
+
+
+async def _resolve_gemini_key(db: AsyncSession, explicit_key: Optional[str] = None) -> Optional[str]:
+    """Resolve Gemini API key from request, environment settings, or saved integrations."""
+    if explicit_key and explicit_key.strip():
+        return explicit_key.strip()
+    from app.config import settings
+    if getattr(settings, "GEMINI_API_KEY", None):
+        return settings.GEMINI_API_KEY
+    try:
+        from sqlalchemy import select
+        from app.models.integration import IntegrationConfig
+        q = select(IntegrationConfig).where(IntegrationConfig.platform.in_(["gemini", "google_gemini"]))
+        res = await db.execute(q)
+        cfg = res.scalar_one_or_none()
+        if cfg and cfg.credentials:
+            cd = json.loads(cfg.credentials)
+            return cd.get("api_key")
+    except Exception:
+        pass
+    return None
+
+
+@router.post("/ai-extract")
+async def ai_extract_products(payload: Dict[str, Any], db: AsyncSession = Depends(get_db)):
+    """
+    Extract products using Google Gemini zero-shot AI extraction.
+    Accepts URL (and optional HTML / API key override).
+    """
+    url = payload.get("url")
+    html = payload.get("html")
+    api_key = payload.get("api_key")
+    model = payload.get("model")
+
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    effective_key = await _resolve_gemini_key(db, api_key)
+
+    if not html:
+        import httpx
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True, verify=False) as client:
+                resp = await client.get(url, headers=headers)
+                html = resp.text
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch {url}: {str(e)}")
+
+    result = await ai_extractor_service.extract_products_with_ai(
+        html=html,
+        base_url=url,
+        api_key=effective_key,
+        model=model
+    )
+    return result
+
+
+@router.post("/ai-suggest-selectors")
+async def ai_suggest_selectors(payload: Dict[str, Any], db: AsyncSession = Depends(get_db)):
+    """
+    Reverse-engineer optimal CSS selectors using Gemini LLM analysis.
+    """
+    url = payload.get("url")
+    html = payload.get("html")
+    api_key = payload.get("api_key")
+
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+
+    effective_key = await _resolve_gemini_key(db, api_key)
+
+    if not html:
+        import httpx
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+            }
+            async with httpx.AsyncClient(timeout=20.0, follow_redirects=True, verify=False) as client:
+                resp = await client.get(url, headers=headers)
+                html = resp.text
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to fetch {url}: {str(e)}")
+
+    result = await ai_extractor_service.suggest_selectors_with_ai(
+        html=html,
+        base_url=url,
+        api_key=effective_key
+    )
+    return result
 
 
 @router.get("/presets")

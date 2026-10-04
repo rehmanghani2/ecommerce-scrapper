@@ -84,6 +84,31 @@ export const scraperService = {
   },
 
   /**
+   * AI-Powered Product Extraction (Google Gemini Zero-Shot)
+   */
+  async aiExtractProducts({ url, html = null, apiKey = null, model = null }) {
+    const response = await apiPost('/scraper/ai-extract', {
+      url,
+      html,
+      api_key: apiKey,
+      model,
+    })
+    return response
+  },
+
+  /**
+   * AI-Powered CSS Selector Reverse-Engineering (Google Gemini)
+   */
+  async aiSuggestSelectors({ url, html = null, apiKey = null }) {
+    const response = await apiPost('/scraper/ai-suggest-selectors', {
+      url,
+      html,
+      api_key: apiKey,
+    })
+    return response
+  },
+
+  /**
    * Get supported platforms
    */
   async getSupportedPlatforms() {

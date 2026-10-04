@@ -25,6 +25,7 @@ from app.schemas.integration_schema import (
     SyncLogResponse,
 )
 from app.services.store_integration_service import store_integration_service
+from app.services.ai_extractor_service import ai_extractor_service
 
 router = APIRouter(prefix="/integrations", tags=["Integrations"])
 
@@ -38,6 +39,9 @@ def _mask_credentials(platform: str, creds: Dict[str, Any]) -> Dict[str, Any]:
     if "consumer_secret" in masked and masked["consumer_secret"]:
         secret = str(masked["consumer_secret"])
         masked["consumer_secret"] = f"{secret[:4]}****{secret[-4:]}" if len(secret) > 8 else "****"
+    if "api_key" in masked and masked["api_key"]:
+        key = str(masked["api_key"])
+        masked["api_key"] = f"{key[:4]}****{key[-4:]}" if len(key) > 8 else "****"
     return masked
 
 
@@ -167,6 +171,16 @@ async def test_integration(payload: IntegrationTestRequest, db: AsyncSession = D
             )
         success, msg, details = await store_integration_service.test_google_sheets(webhook_url)
         return IntegrationTestResponse(success=success, message=msg, details=details)
+
+    elif platform in ("gemini", "google_gemini"):
+        api_key = creds.get("api_key", "")
+        if not api_key:
+            return IntegrationTestResponse(
+                success=False,
+                message="Google Gemini requires an 'api_key'."
+            )
+        res = await ai_extractor_service.test_api_key(api_key)
+        return IntegrationTestResponse(success=res["success"], message=res["message"])
 
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported platform: {platform}")
