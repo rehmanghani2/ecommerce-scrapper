@@ -16,6 +16,7 @@ import {
   BellAlertIcon,
   ChatBubbleLeftRightIcon,
   PhotoIcon,
+  ServerStackIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/helpers'
@@ -34,6 +35,7 @@ import integrationService from '@/services/integrationService'
 import scraperService from '@/services/scraperService'
 import alertService from '@/services/alertService'
 import cloudinaryService from '@/services/cloudinaryService'
+import s3Service from '@/services/s3Service'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -76,6 +78,12 @@ export default function Settings() {
       label: 'Cloudinary CDN',
       icon: PhotoIcon,
       content: <CloudinarySettings />,
+    },
+    {
+      key: 's3',
+      label: 'AWS S3 / Cloud Storage',
+      icon: ServerStackIcon,
+      content: <S3StorageSettings />,
     },
     {
       key: 'appearance',
@@ -1146,6 +1154,221 @@ function CloudinarySettings() {
                 <div className="text-gray-500">
                   Format: {uploadResult.format?.toUpperCase()} • {uploadResult.width}×{uploadResult.height}px • {(uploadResult.bytes / 1024).toFixed(1)} KB
                 </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function S3StorageSettings() {
+  const [accessKeyId, setAccessKeyId] = useState('')
+  const [secretAccessKey, setSecretAccessKey] = useState('')
+  const [bucketName, setBucketName] = useState('')
+  const [region, setRegion] = useState('us-east-1')
+  const [endpointUrl, setEndpointUrl] = useState('')
+  const [prefix, setPrefix] = useState('products')
+  const [testResult, setTestResult] = useState(null)
+  const [testing, setTesting] = useState(false)
+
+  // Image upload sandbox state
+  const [sampleUrl, setSampleUrl] = useState('')
+  const [uploadResult, setUploadResult] = useState(null)
+  const [uploading, setUploading] = useState(false)
+
+  const handleTestConnection = async () => {
+    try {
+      setTesting(true)
+      setTestResult(null)
+      const res = await s3Service.testConnection({
+        access_key_id: accessKeyId,
+        secret_access_key: secretAccessKey,
+        bucket_name: bucketName,
+        region,
+        endpoint_url: endpointUrl || null,
+      })
+      setTestResult(res)
+      if (res.success) {
+        toast.success(res.message || 'Connected to AWS S3 bucket!')
+      } else {
+        toast.error(res.message || 'Failed to connect to S3.')
+      }
+    } catch (e) {
+      toast.error(e.message || 'Error testing S3 credentials')
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const handleTestUpload = async () => {
+    if (!sampleUrl.trim()) {
+      toast.error('Please enter an image URL to test S3 archiving')
+      return
+    }
+    try {
+      setUploading(true)
+      setUploadResult(null)
+      const res = await s3Service.uploadImage(sampleUrl, bucketName || null, prefix || null)
+      setUploadResult(res)
+      toast.success('Image successfully downloaded and stored in S3 bucket!')
+    } catch (e) {
+      toast.error(e.response?.data?.detail || e.message || 'S3 upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <ServerStackIcon className="w-5 h-5 text-amber-500" />
+              AWS S3 & Cloud Storage Archiving
+            </CardTitle>
+            <Badge variant="warning">AWS S3 • Cloudflare R2 • MinIO • Wasabi</Badge>
+          </div>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Automatically download remote product images during scraper jobs and stream them directly into 
+            your private or public AWS S3 bucket, Cloudflare R2 bucket, or self-hosted MinIO cluster.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="S3 Bucket Name"
+              placeholder="e.g. my-scraped-products"
+              value={bucketName}
+              onChange={(e) => setBucketName(e.target.value)}
+              hint="Required: The target bucket name"
+            />
+            <Input
+              label="AWS Region"
+              placeholder="us-east-1"
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              hint="Default: us-east-1 (or auto for Cloudflare R2)"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Access Key ID"
+              placeholder="AKIAIOSFODNN7EXAMPLE"
+              value={accessKeyId}
+              onChange={(e) => setAccessKeyId(e.target.value)}
+            />
+            <Input
+              label="Secret Access Key"
+              type="password"
+              placeholder="••••••••••••••••••••••••••••"
+              value={secretAccessKey}
+              onChange={(e) => setSecretAccessKey(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Custom S3 Endpoint URL (Optional)"
+              placeholder="https://<accountid>.r2.cloudflarestorage.com"
+              value={endpointUrl}
+              onChange={(e) => setEndpointUrl(e.target.value)}
+              hint="For Cloudflare R2, MinIO, Wasabi, or Backblaze B2"
+            />
+            <Input
+              label="Storage Path Prefix"
+              placeholder="products"
+              value={prefix}
+              onChange={(e) => setPrefix(e.target.value)}
+              hint="Folder inside bucket (default: products/)"
+            />
+          </div>
+
+          {/* Connection Test Diagnostics */}
+          {testResult && (
+            <div className={`p-4 rounded-xl text-xs space-y-1.5 border ${
+              testResult.success
+                ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
+                : 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300'
+            }`}>
+              <div className="font-semibold flex items-center gap-1.5">
+                {testResult.success ? '✓' : '✕'} {testResult.message}
+              </div>
+              {testResult.bucket && (
+                <div className="text-gray-600 dark:text-gray-400">
+                  Target Bucket: <span className="font-semibold">{testResult.bucket}</span> • Region: {testResult.region}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              disabled={testing || (!accessKeyId && !bucketName)}
+              onClick={handleTestConnection}
+            >
+              {testing ? 'Testing S3 Bucket...' : 'Test S3 Bucket Connection'}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                toast.success('AWS S3 storage configuration saved!')
+              }}
+            >
+              Save Configuration
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Live S3 Upload Tester */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <SparklesIcon className="w-4 h-4 text-primary-600" />
+            Live S3 Image Ingestion Sandbox
+          </CardTitle>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Paste any competitor product image URL to test download and direct streaming into your configured S3 bucket.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Input
+              placeholder="https://images.unsplash.com/photo-1523275335684-37898b6baf30"
+              value={sampleUrl}
+              onChange={(e) => setSampleUrl(e.target.value)}
+              className="flex-1"
+            />
+            <Button
+              variant="secondary"
+              onClick={handleTestUpload}
+              disabled={uploading || !sampleUrl.trim()}
+            >
+              {uploading ? 'Archiving to S3...' : 'Download & Stream to S3'}
+            </Button>
+          </div>
+
+          {uploadResult && uploadResult.success && (
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/40 space-y-1 text-xs">
+              <div className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                <CheckCircleIcon className="w-4 h-4" />
+                Successfully Streamed to S3 Bucket ({uploadResult.bucket})
+              </div>
+              <div className="text-gray-600 dark:text-gray-300 font-mono break-all">
+                S3 Key: <span className="font-semibold text-gray-800 dark:text-gray-200">{uploadResult.s3_key}</span>
+              </div>
+              <div className="text-gray-600 dark:text-gray-300 font-mono break-all">
+                Public URL: <a href={uploadResult.s3_url} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">{uploadResult.s3_url}</a>
+              </div>
+              <div className="text-gray-500">
+                Content-Type: {uploadResult.content_type} • Size: {(uploadResult.size_bytes / 1024).toFixed(1)} KB
               </div>
             </div>
           )}

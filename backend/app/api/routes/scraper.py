@@ -744,6 +744,18 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                                     except Exception as c_err:
                                         logger.debug(f"Cloudinary auto-upload error: {c_err}")
 
+                                # Optional AWS S3 Cloud Storage auto-upload
+                                if settings.AWS_S3_AUTO_UPLOAD and p.image_url:
+                                    try:
+                                        from app.services.s3_storage_service import s3_storage_service
+                                        if s3_storage_service.is_configured():
+                                            s3_res = await s3_storage_service.download_and_upload_image(p.image_url)
+                                            if s3_res.get("success"):
+                                                p.s3_url = s3_res.get("s3_url")
+                                                p.s3_key = s3_res.get("s3_key")
+                                    except Exception as s3_err:
+                                        logger.debug(f"S3 auto-upload error: {s3_err}")
+
                                 save_db.add(p)
                                 await save_db.flush()
 

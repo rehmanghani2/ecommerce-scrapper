@@ -94,6 +94,17 @@ class Settings(BaseSettings):
     CLOUDINARY_FOLDER: str = Field(default="ecommerce_scraper", env="CLOUDINARY_FOLDER")
     CLOUDINARY_AUTO_UPLOAD: bool = Field(default=False, env="CLOUDINARY_AUTO_UPLOAD")
     
+    # AWS S3 & S3-Compatible Cloud Storage Settings (Cloudflare R2, MinIO, Wasabi, Backblaze B2)
+    AWS_ACCESS_KEY_ID: Optional[str] = Field(default=None, env="AWS_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY: Optional[str] = Field(default=None, env="AWS_SECRET_ACCESS_KEY")
+    AWS_REGION: str = Field(default="us-east-1", env="AWS_REGION")
+    AWS_S3_BUCKET: Optional[str] = Field(default=None, env="AWS_S3_BUCKET")
+    AWS_S3_ENDPOINT_URL: Optional[str] = Field(default=None, env="AWS_S3_ENDPOINT_URL")  # For MinIO / Cloudflare R2
+    AWS_S3_CUSTOM_DOMAIN: Optional[str] = Field(default=None, env="AWS_S3_CUSTOM_DOMAIN")  # CDN or custom domain URL
+    AWS_S3_PREFIX: str = Field(default="products", env="AWS_S3_PREFIX")
+    AWS_S3_AUTO_UPLOAD: bool = Field(default=False, env="AWS_S3_AUTO_UPLOAD")
+    AWS_S3_ACL: str = Field(default="public-read", env="AWS_S3_ACL")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
