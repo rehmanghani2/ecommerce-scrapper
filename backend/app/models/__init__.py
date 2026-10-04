@@ -5,6 +5,7 @@ from .job import Job, JobStatus
 from .product import Product, ProductImage, ProductVariant, PriceHistory
 from .schedule import ScheduledJob
 from .integration import IntegrationConfig, SyncLog
+from .alert import AlertConfig, AlertNotificationLog
 from .selector_preset import SelectorPreset
 from .user import User
 
@@ -22,6 +23,8 @@ __all__ = [
     "ScheduledJob",
     "IntegrationConfig",
     "SyncLog",
+    "AlertConfig",
+    "AlertNotificationLog",
     "SelectorPreset",
     "User",
 ]

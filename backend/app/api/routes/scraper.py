@@ -563,6 +563,23 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                                         existing_p.price_change = change
                                         if old_price > 0:
                                             existing_p.price_change_percentage = round((change / old_price) * 100, 2)
+
+                                        # Trigger real-time price drop notification (Telegram / Slack / Discord / Webhook)
+                                        if p_price < old_price:
+                                            try:
+                                                from app.services.alert_service import alert_service
+                                                await alert_service.process_price_change(
+                                                    db=save_db,
+                                                    product_id=existing_p.id,
+                                                    product_name=existing_p.name,
+                                                    product_url=existing_p.url,
+                                                    old_price=old_price,
+                                                    new_price=p_price,
+                                                    currency=p_curr,
+                                                    image_url=existing_p.image_url,
+                                                )
+                                            except Exception as alert_err:
+                                                logger.error(f"Error triggering price drop alert: {alert_err}")
                                     
                                     existing_p.price = p_price
                                     existing_p.lowest_price = min(float(existing_p.lowest_price or p_price), p_price)

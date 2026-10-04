@@ -13,6 +13,8 @@ import {
   ExclamationCircleIcon,
   ArrowPathIcon,
   SparklesIcon,
+  BellAlertIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/helpers'
@@ -29,6 +31,7 @@ import {
 } from '@/components/Common'
 import integrationService from '@/services/integrationService'
 import scraperService from '@/services/scraperService'
+import alertService from '@/services/alertService'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -236,72 +239,478 @@ function SecuritySettings() {
 }
 
 function NotificationSettings() {
-  const [settings, setSettings] = useState({
-    email_job_completed: true,
-    email_job_failed: true,
-    email_weekly_report: false,
-    push_job_completed: true,
-    push_job_failed: true,
-  })
+  // Telegram State
+  const [telegram, setTelegram] = useState({ bot_token: '', chat_id: '', min_drop_percentage: 5.0, is_active: true })
+  const [testingTelegram, setTestingTelegram] = useState(false)
+  const [telegramTestResult, setTelegramTestResult] = useState(null)
 
-  const handleToggle = (key) => {
-    setSettings((prev) => ({ ...prev, [key]: !prev[key] }))
+  // Slack State
+  const [slack, setSlack] = useState({ webhook_url: '', min_drop_percentage: 5.0, is_active: true })
+  const [testingSlack, setTestingSlack] = useState(false)
+  const [slackTestResult, setSlackTestResult] = useState(null)
+
+  // Discord State
+  const [discord, setDiscord] = useState({ webhook_url: '', min_drop_percentage: 5.0, is_active: true })
+  const [testingDiscord, setTestingDiscord] = useState(false)
+  const [discordTestResult, setDiscordTestResult] = useState(null)
+
+  // Alert Logs
+  const [alertLogs, setAlertLogs] = useState([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
+
+  useEffect(() => {
+    loadAlertConfigs()
+    loadAlertLogs()
+  }, [])
+
+  const loadAlertConfigs = async () => {
+    try {
+      const data = await alertService.getConfigs()
+      const tg = (data || []).find((c) => c.channel === 'telegram')
+      if (tg) {
+        setTelegram({
+          bot_token: tg.masked_credentials?.bot_token || '',
+          chat_id: tg.masked_credentials?.chat_id || '',
+          min_drop_percentage: tg.min_drop_percentage || 5.0,
+          is_active: tg.is_active,
+        })
+      }
+      const sl = (data || []).find((c) => c.channel === 'slack')
+      if (sl) {
+        setSlack({
+          webhook_url: sl.masked_credentials?.webhook_url || '',
+          min_drop_percentage: sl.min_drop_percentage || 5.0,
+          is_active: sl.is_active,
+        })
+      }
+      const dc = (data || []).find((c) => c.channel === 'discord')
+      if (dc) {
+        setDiscord({
+          webhook_url: dc.masked_credentials?.webhook_url || '',
+          min_drop_percentage: dc.min_drop_percentage || 5.0,
+          is_active: dc.is_active,
+        })
+      }
+    } catch (e) {
+      console.error('Failed to load alert configs', e)
+    }
+  }
+
+  const loadAlertLogs = async () => {
+    try {
+      setLoadingLogs(true)
+      const logs = await alertService.getLogs(20)
+      setAlertLogs(logs || [])
+    } catch (e) {
+      console.error('Failed to load alert logs', e)
+    } finally {
+      setLoadingLogs(false)
+    }
+  }
+
+  // Telegram Handlers
+  const handleTestTelegram = async () => {
+    setTestingTelegram(true)
+    setTelegramTestResult(null)
+    try {
+      const res = await alertService.testChannel('telegram', {
+        bot_token: telegram.bot_token,
+        chat_id: telegram.chat_id,
+      })
+      setTelegramTestResult(res)
+      if (res.success) toast.success('Test alert sent to Telegram!')
+      else toast.error(res.message)
+    } catch (e) {
+      toast.error('Telegram test failed: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setTestingTelegram(false)
+    }
+  }
+
+  const handleSaveTelegram = async () => {
+    try {
+      await alertService.saveConfig({
+        channel: 'telegram',
+        name: 'Telegram Price Drop Alerts',
+        is_active: telegram.is_active,
+        min_drop_percentage: telegram.min_drop_percentage,
+        credentials: { bot_token: telegram.bot_token, chat_id: telegram.chat_id },
+      })
+      toast.success('Telegram alert settings saved!')
+      loadAlertConfigs()
+    } catch (e) {
+      toast.error('Failed to save Telegram settings: ' + e.message)
+    }
+  }
+
+  // Slack Handlers
+  const handleTestSlack = async () => {
+    setTestingSlack(true)
+    setSlackTestResult(null)
+    try {
+      const res = await alertService.testChannel('slack', {
+        webhook_url: slack.webhook_url,
+      })
+      setSlackTestResult(res)
+      if (res.success) toast.success('Test alert sent to Slack!')
+      else toast.error(res.message)
+    } catch (e) {
+      toast.error('Slack test failed: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setTestingSlack(false)
+    }
+  }
+
+  const handleSaveSlack = async () => {
+    try {
+      await alertService.saveConfig({
+        channel: 'slack',
+        name: 'Slack Price Drop Alerts',
+        is_active: slack.is_active,
+        min_drop_percentage: slack.min_drop_percentage,
+        credentials: { webhook_url: slack.webhook_url },
+      })
+      toast.success('Slack alert settings saved!')
+      loadAlertConfigs()
+    } catch (e) {
+      toast.error('Failed to save Slack settings: ' + e.message)
+    }
+  }
+
+  // Discord Handlers
+  const handleTestDiscord = async () => {
+    setTestingDiscord(true)
+    setDiscordTestResult(null)
+    try {
+      const res = await alertService.testChannel('discord', {
+        webhook_url: discord.webhook_url,
+      })
+      setDiscordTestResult(res)
+      if (res.success) toast.success('Test alert sent to Discord!')
+      else toast.error(res.message)
+    } catch (e) {
+      toast.error('Discord test failed: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setTestingDiscord(false)
+    }
+  }
+
+  const handleSaveDiscord = async () => {
+    try {
+      await alertService.saveConfig({
+        channel: 'discord',
+        name: 'Discord Price Drop Alerts',
+        is_active: discord.is_active,
+        min_drop_percentage: discord.min_drop_percentage,
+        credentials: { webhook_url: discord.webhook_url },
+      })
+      toast.success('Discord alert settings saved!')
+      loadAlertConfigs()
+    } catch (e) {
+      toast.error('Failed to save Discord settings: ' + e.message)
+    }
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Notification Preferences</CardTitle>
-      </CardHeader>
-      
-      <div className="space-y-6">
-        <div>
-          <h4 className="font-medium text-gray-900 dark:text-white mb-3">Email Notifications</h4>
-          <div className="space-y-3">
-            <ToggleItem
-              label="Job completed"
-              description="Receive an email when a scraping job finishes successfully"
-              checked={settings.email_job_completed}
-              onChange={() => handleToggle('email_job_completed')}
-            />
-            <ToggleItem
-              label="Job failed"
-              description="Receive an email when a scraping job fails"
-              checked={settings.email_job_failed}
-              onChange={() => handleToggle('email_job_failed')}
-            />
-            <ToggleItem
-              label="Weekly report"
-              description="Receive a weekly summary of your scraping activity"
-              checked={settings.email_weekly_report}
-              onChange={() => handleToggle('email_weekly_report')}
-            />
-          </div>
-        </div>
-
-        <div className="border-t dark:border-gray-700 pt-6">
-          <h4 className="font-medium text-gray-900 dark:text-white mb-3">Push Notifications</h4>
-          <div className="space-y-3">
-            <ToggleItem
-              label="Job completed"
-              description="Get a browser notification when a job finishes"
-              checked={settings.push_job_completed}
-              onChange={() => handleToggle('push_job_completed')}
-            />
-            <ToggleItem
-              label="Job failed"
-              description="Get a browser notification when a job fails"
-              checked={settings.push_job_failed}
-              onChange={() => handleToggle('push_job_failed')}
-            />
-          </div>
-        </div>
-
-        <div className="pt-4">
-          <Button>Save Preferences</Button>
-        </div>
+    <div className="space-y-6">
+      {/* Intro Banner */}
+      <div className="bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4">
+        <h3 className="font-semibold text-indigo-900 dark:text-indigo-100 flex items-center gap-2">
+          <BellAlertIcon className="w-5 h-5 text-indigo-600" />
+          Price Drop & Stock Alert Notification Center
+        </h3>
+        <p className="text-xs text-indigo-700 dark:text-indigo-300 mt-1">
+          Receive real-time instant alerts on Telegram, Slack, or Discord whenever a competitor drops their price, runs a promotion, or changes inventory availability during scheduled crawls.
+        </p>
       </div>
-    </Card>
+
+      {/* 1. Telegram Bot Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <span className="text-lg">✈️</span>
+              Telegram Bot Alerts
+            </CardTitle>
+            <Badge variant="primary" className="bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300">
+              Instant Push
+            </Badge>
+          </div>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Receive rich Markdown alerts with direct store links, previous price comparisons, and savings calculations on your private chat or team channel.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Telegram Bot Token"
+              type="password"
+              placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+              value={telegram.bot_token}
+              onChange={(e) => setTelegram({ ...telegram, bot_token: e.target.value })}
+              hint="Create a bot via @BotFather on Telegram"
+            />
+            <Input
+              label="Target Chat ID or @Channel"
+              placeholder="-100123456789 or @my_channel"
+              value={telegram.chat_id}
+              onChange={(e) => setTelegram({ ...telegram, chat_id: e.target.value })}
+              hint="Your personal user ID or channel ID"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center pt-2">
+            <Input
+              label="Minimum Price Drop Trigger (%)"
+              type="number"
+              value={telegram.min_drop_percentage}
+              onChange={(e) => setTelegram({ ...telegram, min_drop_percentage: parseFloat(e.target.value) || 0 })}
+              hint="Only trigger alerts if price drops by at least this percentage"
+              min={1}
+              max={100}
+            />
+            <div className="pt-2">
+              <ToggleItem
+                label="Enable Telegram Alerts"
+                description="Deliver price drop notifications to Telegram"
+                checked={telegram.is_active}
+                onChange={() => setTelegram({ ...telegram, is_active: !telegram.is_active })}
+              />
+            </div>
+          </div>
+
+          {telegramTestResult && (
+            <Alert
+              variant={telegramTestResult.success ? 'success' : 'danger'}
+              title={telegramTestResult.message}
+            />
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              disabled={testingTelegram || !telegram.bot_token || !telegram.chat_id}
+              onClick={handleTestTelegram}
+            >
+              {testingTelegram ? 'Sending Test...' : 'Send Test Telegram Alert'}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!telegram.bot_token || !telegram.chat_id}
+              onClick={handleSaveTelegram}
+            >
+              Save Telegram Config
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* 2. Slack Incoming Webhook Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <ChatBubbleLeftRightIcon className="w-5 h-5 text-emerald-500" />
+              Slack Channel Alerts
+            </CardTitle>
+            <Badge variant="success">Incoming Webhook</Badge>
+          </div>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Posts interactive Slack Block Kit cards with product photo, competitor pricing, savings percentages, and direct view links.
+          </p>
+
+          <Input
+            label="Slack Incoming Webhook URL"
+            type="password"
+            placeholder="https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+            value={slack.webhook_url}
+            onChange={(e) => setSlack({ ...slack, webhook_url: e.target.value })}
+            hint="From Slack App Directory → Incoming Webhooks"
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center pt-2">
+            <Input
+              label="Minimum Price Drop Trigger (%)"
+              type="number"
+              value={slack.min_drop_percentage}
+              onChange={(e) => setSlack({ ...slack, min_drop_percentage: parseFloat(e.target.value) || 0 })}
+              hint="Only trigger alerts if price drops by at least this percentage"
+              min={1}
+              max={100}
+            />
+            <div className="pt-2">
+              <ToggleItem
+                label="Enable Slack Alerts"
+                description="Deliver price drop notifications to Slack channel"
+                checked={slack.is_active}
+                onChange={() => setSlack({ ...slack, is_active: !slack.is_active })}
+              />
+            </div>
+          </div>
+
+          {slackTestResult && (
+            <Alert
+              variant={slackTestResult.success ? 'success' : 'danger'}
+              title={slackTestResult.message}
+            />
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              disabled={testingSlack || !slack.webhook_url}
+              onClick={handleTestSlack}
+            >
+              {testingSlack ? 'Sending Test...' : 'Send Test Slack Alert'}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!slack.webhook_url}
+              onClick={handleSaveSlack}
+            >
+              Save Slack Config
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* 3. Discord / Custom Webhook Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <span className="text-lg">🎮</span>
+              Discord & Custom Webhook Alerts
+            </CardTitle>
+            <Badge variant="warning">Rich Embed / Webhook</Badge>
+          </div>
+        </CardHeader>
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Posts rich Discord embeds with color-coded price drop badges or pushes raw events to Zapier, Make, and custom servers.
+          </p>
+
+          <Input
+            label="Discord Webhook URL"
+            type="password"
+            placeholder="https://discord.com/api/webhooks/123456789/abcdefgh..."
+            value={discord.webhook_url}
+            onChange={(e) => setDiscord({ ...discord, webhook_url: e.target.value })}
+            hint="From Discord Channel Settings → Integrations → Webhooks"
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center pt-2">
+            <Input
+              label="Minimum Price Drop Trigger (%)"
+              type="number"
+              value={discord.min_drop_percentage}
+              onChange={(e) => setDiscord({ ...discord, min_drop_percentage: parseFloat(e.target.value) || 0 })}
+              hint="Only trigger alerts if price drops by at least this percentage"
+              min={1}
+              max={100}
+            />
+            <div className="pt-2">
+              <ToggleItem
+                label="Enable Discord Alerts"
+                description="Deliver price drop notifications to Discord channel"
+                checked={discord.is_active}
+                onChange={() => setDiscord({ ...discord, is_active: !discord.is_active })}
+              />
+            </div>
+          </div>
+
+          {discordTestResult && (
+            <Alert
+              variant={discordTestResult.success ? 'success' : 'danger'}
+              title={discordTestResult.message}
+            />
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              disabled={testingDiscord || !discord.webhook_url}
+              onClick={handleTestDiscord}
+            >
+              {testingDiscord ? 'Sending Test...' : 'Send Test Discord Alert'}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!discord.webhook_url}
+              onClick={handleSaveDiscord}
+            >
+              Save Discord Config
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* 4. Real-Time Triggered Alert History Log */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Recent Triggered Alerts ({alertLogs.length})</CardTitle>
+            <Button size="sm" variant="outline" onClick={loadAlertLogs}>
+              Refresh Logs
+            </Button>
+          </div>
+        </CardHeader>
+        <div className="space-y-3">
+          {alertLogs.length === 0 ? (
+            <p className="text-xs text-gray-500 dark:text-gray-400 py-3 text-center">
+              No price drop alerts triggered yet. As scheduled crawls detect price drops, audit logs will appear here.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b dark:border-gray-700 text-gray-500">
+                    <th className="py-2">Product</th>
+                    <th className="py-2">Price Drop</th>
+                    <th className="py-2">Discount</th>
+                    <th className="py-2">Channel</th>
+                    <th className="py-2">Status</th>
+                    <th className="py-2">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y dark:divide-gray-800">
+                  {alertLogs.map((log) => (
+                    <tr key={log.id}>
+                      <td className="py-2.5 font-medium text-gray-900 dark:text-white truncate max-w-xs">
+                        {log.product_name}
+                      </td>
+                      <td className="py-2.5 font-mono">
+                        <span className="line-through text-gray-400 mr-1.5">{log.currency} {log.old_price}</span>
+                        <span className="text-emerald-600 font-bold">{log.currency} {log.new_price}</span>
+                      </td>
+                      <td className="py-2.5">
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold">
+                          -{log.price_change_percentage}%
+                        </span>
+                      </td>
+                      <td className="py-2.5 uppercase font-semibold text-gray-500">
+                        {log.channel}
+                      </td>
+                      <td className="py-2.5">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${log.status === 'sent' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400' : 'bg-rose-100 text-rose-700'}`}>
+                          {log.status.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-gray-400">
+                        {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
   )
 }
 
