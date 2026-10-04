@@ -25,6 +25,7 @@ class PlaywrightScraper:
         max_depth: int = 3,
         request_delay: float = 1.0,
         proxy: Optional[Dict[str, str]] = None,
+        proxy_pool: Optional[Any] = None,
         on_log: Optional[Callable[[str, str], Awaitable[None]]] = None,
         on_product_batch: Optional[Callable[[List[Dict]], Awaitable[None]]] = None,
         on_page_done: Optional[Callable[[str, bool, int], Awaitable[None]]] = None,
@@ -36,6 +37,14 @@ class PlaywrightScraper:
         self.max_depth = max_depth
         self.request_delay = request_delay
         self.proxy = proxy
+
+        if proxy_pool:
+            self.proxy_pool = proxy_pool
+        elif proxy:
+            from app.core.proxy_manager import ProxyPoolManager
+            self.proxy_pool = ProxyPoolManager([proxy])
+        else:
+            self.proxy_pool = None
 
         parsed = urlparse(start_url)
         self.allowed_domain = parsed.netloc
@@ -104,11 +113,16 @@ class PlaywrightScraper:
                         }
                     }
 
-                    def _launch_browser(use_proxy=False, engine_name="chromium"):
+                    current_proxy_node = self.proxy_pool.get_next_proxy() if self.proxy_pool else None
+
+                    def _launch_browser(proxy_node=None, engine_name="chromium"):
                         kw = {"headless": True}
                         if engine_name == "chromium":
                             kw["args"] = launch_args
-                        if use_proxy and self.proxy:
+                        if proxy_node:
+                            kw["proxy"] = proxy_node.to_playwright_proxy()
+                            _sync_log(f"  ↳ Using proxy: {proxy_node.masked()} [{engine_name}]")
+                        elif self.proxy:
                             kw["proxy"] = self.proxy
                             _sync_log(f"  ↳ Using proxy server: {self.proxy.get('server', self.proxy)}")
                         else:
@@ -133,8 +147,7 @@ class PlaywrightScraper:
 
                     # Strategy: select optimal browser engine (Firefox bypasses Akamai/eBay blocks)
                     current_engine = "firefox" if "ebay." in self.allowed_domain else "chromium"
-                    using_proxy = False
-                    browser, page = _launch_browser(use_proxy=False, engine_name=current_engine)
+                    browser, page = _launch_browser(proxy_node=current_proxy_node, engine_name=current_engine)
 
                     while self._queue and pages_scraped < self.max_pages and self._total_products < self.max_products:
                         url, depth = self._queue.pop(0)
@@ -154,12 +167,18 @@ class PlaywrightScraper:
                             continue
                         except Exception as nav_err:
                             err_str = str(nav_err)
-                            # If tunnel/connection failed on direct, retry with proxy
-                            if not using_proxy and self.proxy and ("TUNNEL" in err_str.upper() or "CONNECTION" in err_str.upper()):
-                                _sync_log(f"  ↳ Direct connection failed, switching to proxy...", "warning")
-                                browser.close()
-                                using_proxy = True
-                                browser, page = _launch_browser(use_proxy=True)
+                            if self.proxy_pool and self.proxy_pool.failover_enabled:
+                                self.proxy_pool.report_failure(current_proxy_node, error_msg=err_str)
+                                next_node = self.proxy_pool.get_next_proxy()
+                                next_lbl = next_node.masked() if next_node else "Direct"
+                                curr_lbl = current_proxy_node.masked() if current_proxy_node else "Direct"
+                                _sync_log(f"  ↳ Navigation error ({nav_err}) on {curr_lbl} — rotating to {next_lbl}...", "warning")
+                                try:
+                                    browser.close()
+                                except Exception:
+                                    pass
+                                current_proxy_node = next_node
+                                browser, page = _launch_browser(proxy_node=current_proxy_node, engine_name=current_engine)
                                 self._visited.discard(url)
                                 self._queue.insert(0, (url, depth))
                                 continue
@@ -170,15 +189,25 @@ class PlaywrightScraper:
 
                         status = response.status if response else 0
 
-                        # If first page is 403/503 and we have a proxy, retry with proxy
-                        if status in (403, 503) and not using_proxy and self.proxy and pages_scraped == 0:
-                            _sync_log(f"  ↳ HTTP {status} on direct — retrying with proxy...", "warning")
-                            browser.close()
-                            using_proxy = True
-                            browser, page = _launch_browser(use_proxy=True)
+                        # Automated failover on anti-bot blocks (403 Forbidden, 429 Too Many Requests, 503 Service Unavailable)
+                        if status in (403, 429, 503) and self.proxy_pool and self.proxy_pool.failover_enabled:
+                            self.proxy_pool.report_failure(current_proxy_node, status)
+                            next_node = self.proxy_pool.get_next_proxy()
+                            next_lbl = next_node.masked() if next_node else "Direct"
+                            curr_lbl = current_proxy_node.masked() if current_proxy_node else "Direct"
+                            _sync_log(f"  ↳ HTTP {status} on {curr_lbl} — auto-rotating to {next_lbl}...", "warning")
+                            try:
+                                browser.close()
+                            except Exception:
+                                pass
+                            current_proxy_node = next_node
+                            browser, page = _launch_browser(proxy_node=current_proxy_node, engine_name=current_engine)
                             self._visited.discard(url)
                             self._queue.insert(0, (url, depth))
                             continue
+
+                        if current_proxy_node and status < 400:
+                            self.proxy_pool.report_success(current_proxy_node)
 
                         if status >= 400:
                             _sync_log(f"  ↳ HTTP {status} — skipping", "warning")

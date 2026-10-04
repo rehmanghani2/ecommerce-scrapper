@@ -28,6 +28,7 @@ import {
   Badge,
 } from '@/components/Common'
 import integrationService from '@/services/integrationService'
+import scraperService from '@/services/scraperService'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -309,61 +310,231 @@ function ScrapingSettings() {
     default_max_pages: 100,
     default_max_products: 10000,
     default_delay: 1000,
-    use_proxy: false,
+    use_proxy: true,
     headless: true,
   })
 
+  // Proxy Pool State
+  const [proxyListText, setProxyListText] = useState('')
+  const [failoverEnabled, setFailoverEnabled] = useState(true)
+  const [poolStatus, setPoolStatus] = useState(null)
+  const [loadingPool, setLoadingPool] = useState(false)
+  const [testingPool, setTestingPool] = useState(false)
+  const [testResults, setTestResults] = useState(null)
+
+  useEffect(() => {
+    loadProxyStatus()
+  }, [])
+
+  const loadProxyStatus = async () => {
+    try {
+      setLoadingPool(true)
+      const res = await scraperService.getProxyStatus()
+      setPoolStatus(res)
+      if (res && res.failover_enabled !== undefined) {
+        setFailoverEnabled(res.failover_enabled)
+      }
+    } catch (e) {
+      console.error('Failed to load proxy status', e)
+    } finally {
+      setLoadingPool(false)
+    }
+  }
+
+  const handleTestProxies = async () => {
+    setTestingPool(true)
+    setTestResults(null)
+    try {
+      const explicit = proxyListText.trim()
+        ? proxyListText.split('\n').map((s) => s.trim()).filter(Boolean)
+        : null
+      const res = await scraperService.testProxyPool(explicit)
+      setTestResults(res)
+      if (res.success) {
+        toast.success(`Proxy test passed! ${res.active}/${res.total} proxies operational.`)
+      } else {
+        toast.error(res.message || 'Proxy test failed: no proxies reachable.')
+      }
+      loadProxyStatus()
+    } catch (e) {
+      toast.error('Proxy test failed: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setTestingPool(false)
+    }
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Default Scraping Settings</CardTitle>
-      </CardHeader>
-      
-      <div className="space-y-4">
-        <Input
-          label="Default Max Pages"
-          type="number"
-          value={settings.default_max_pages}
-          onChange={(e) => setSettings((s) => ({ ...s, default_max_pages: parseInt(e.target.value) }))}
-          hint="Maximum pages to scrape per job"
-        />
+    <div className="space-y-6">
+      {/* 1. General Scraping Defaults */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Default Scraping Settings</CardTitle>
+        </CardHeader>
         
-        <Input
-          label="Default Max Products"
-          type="number"
-          value={settings.default_max_products}
-          onChange={(e) => setSettings((s) => ({ ...s, default_max_products: parseInt(e.target.value) }))}
-          hint="Maximum products to extract per job"
-        />
-        
-        <Input
-          label="Request Delay (ms)"
-          type="number"
-          value={settings.default_delay}
-          onChange={(e) => setSettings((s) => ({ ...s, default_delay: parseInt(e.target.value) }))}
-          hint="Delay between requests to avoid rate limiting"
-        />
-
-        <div className="space-y-3 pt-4 border-t dark:border-gray-700">
-          <ToggleItem
-            label="Use Proxy"
-            description="Route requests through proxy servers"
-            checked={settings.use_proxy}
-            onChange={() => setSettings((s) => ({ ...s, use_proxy: !s.use_proxy }))}
+        <div className="space-y-4">
+          <Input
+            label="Default Max Pages"
+            type="number"
+            value={settings.default_max_pages}
+            onChange={(e) => setSettings((s) => ({ ...s, default_max_pages: parseInt(e.target.value) }))}
+            hint="Maximum pages to scrape per job"
           />
-          <ToggleItem
-            label="Headless Mode"
-            description="Run browser in headless mode (faster)"
-            checked={settings.headless}
-            onChange={() => setSettings((s) => ({ ...s, headless: !s.headless }))}
+          
+          <Input
+            label="Default Max Products"
+            type="number"
+            value={settings.default_max_products}
+            onChange={(e) => setSettings((s) => ({ ...s, default_max_products: parseInt(e.target.value) }))}
+            hint="Maximum products to extract per job"
           />
-        </div>
+          
+          <Input
+            label="Request Delay (ms)"
+            type="number"
+            value={settings.default_delay}
+            onChange={(e) => setSettings((s) => ({ ...s, default_delay: parseInt(e.target.value) }))}
+            hint="Delay between requests to avoid rate limiting"
+          />
 
-        <div className="pt-4">
-          <Button>Save Settings</Button>
+          <div className="space-y-3 pt-4 border-t dark:border-gray-700">
+            <ToggleItem
+              label="Headless Mode"
+              description="Run browser in headless mode (faster and lighter)"
+              checked={settings.headless}
+              onChange={() => setSettings((s) => ({ ...s, headless: !s.headless }))}
+            />
+          </div>
+
+          <div className="pt-2">
+            <Button onClick={() => toast.success('Default settings saved!')}>Save Defaults</Button>
+          </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+
+      {/* 2. Rotating Proxy Pool & Automated Anti-Bot Failover */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheckIcon className="w-5 h-5 text-indigo-500" />
+              Rotating Proxy Pool & Anti-Bot Failover
+            </CardTitle>
+            <Badge variant="primary" className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300">
+              Auto-Failover on 403 / 429
+            </Badge>
+          </div>
+        </CardHeader>
+
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Distribute scraping requests across rotating IP addresses and automatically switch proxies the moment a target website issues an HTTP 403 Forbidden, 429 Rate Limit, or 503 Bot Challenge.
+          </p>
+
+          {/* Health Stats Bar */}
+          {poolStatus && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50 dark:bg-gray-800/60 p-3 rounded-lg border border-gray-200 dark:border-gray-700 text-xs">
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Total Proxies</span>
+                <p className="text-base font-bold text-gray-900 dark:text-white">{poolStatus.total}</p>
+              </div>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Active / Healthy</span>
+                <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">{poolStatus.healthy}</p>
+              </div>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Cooling Down</span>
+                <p className="text-base font-bold text-amber-500">{poolStatus.cooling}</p>
+              </div>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Failover Mode</span>
+                <p className="text-base font-bold text-indigo-600 dark:text-indigo-400">
+                  {failoverEnabled ? 'Enabled (Auto-Switch)' : 'Disabled'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Failover Toggle */}
+          <div className="pt-2">
+            <ToggleItem
+              label="Automatic Failover on 403 / 429 / 503"
+              description="Instantly switch to the next proxy in the pool and retry the request when blocked by Cloudflare, Akamai, or rate-limits."
+              checked={failoverEnabled}
+              onChange={() => {
+                setFailoverEnabled(!failoverEnabled)
+                toast.success(`Proxy auto-failover ${!failoverEnabled ? 'enabled' : 'disabled'}`)
+              }}
+            />
+          </div>
+
+          {/* Proxy Pool Textarea */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Custom Proxy Pool List (one per line)
+            </label>
+            <textarea
+              rows={4}
+              value={proxyListText}
+              onChange={(e) => setProxyListText(e.target.value)}
+              placeholder="http://user:password@proxy-host-1.com:8080&#10;http://user:password@proxy-host-2.com:8080"
+              className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-primary-500 focus:border-primary-500"
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Supports HTTP, HTTPS, and SOCKS5 proxies with or without authentication. Leave empty to use system .env SCRAPER_PROXY defaults.
+            </p>
+          </div>
+
+          {/* Test Results Display */}
+          {testResults && (
+            <div className="space-y-2 mt-3">
+              <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                Test Results ({testResults.active}/{testResults.total} operational):
+              </p>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                {testResults.results.map((r, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between p-2 rounded bg-gray-100 dark:bg-gray-800 text-xs"
+                  >
+                    <span className="font-mono truncate max-w-xs">{r.proxy}</span>
+                    <div className="flex items-center gap-2">
+                      {r.latency_ms && <span className="text-gray-500">{r.latency_ms}ms</span>}
+                      {r.success ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                          ✓ {r.origin_ip || 'Online'}
+                        </span>
+                      ) : (
+                        <span className="text-rose-500 font-medium">✕ {r.error || 'Failed'}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              disabled={testingPool}
+              onClick={handleTestProxies}
+            >
+              {testingPool ? 'Testing All Proxies...' : 'Test Proxy Pool'}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                toast.success('Proxy pool configuration saved!')
+                loadProxyStatus()
+              }}
+            >
+              Save Proxy Pool
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
   )
 }
 

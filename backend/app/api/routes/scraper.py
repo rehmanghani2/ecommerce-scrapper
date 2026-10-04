@@ -643,39 +643,28 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
             max_depth = config.max_depth if config else 3
             request_delay = ((config.request_delay or 1000) / 1000.0) if config else 1.0
             
-            # Proxy configuration support
-            proxy_setting = None
-            import os
+            # Rotating Proxy Pool initialization with automated failover
+            from app.core.proxy_manager import build_proxy_pool
+            from app.config import settings
+
+            raw_proxies = None
             if config:
-                raw_proxy = getattr(config, 'proxy', None)
-                if not raw_proxy and getattr(config, 'custom_settings', None):
-                    raw_proxy = config.custom_settings.get('proxy')
-                if raw_proxy:
-                    proxy_setting = raw_proxy
+                raw_proxies = getattr(config, 'proxy', None)
+                if not raw_proxies and getattr(config, 'custom_settings', None):
+                    raw_proxies = config.custom_settings.get('proxy') or config.custom_settings.get('proxies')
 
-            if not proxy_setting:
-                from app.config import settings
-                proxy_setting = getattr(settings, "SCRAPER_PROXY", None) or os.environ.get("SCRAPER_PROXY")
+            proxy_pool = build_proxy_pool(
+                explicit_proxies=raw_proxies,
+                failover_enabled=getattr(settings, "PROXY_FAILOVER_ENABLED", True),
+                max_retries=getattr(settings, "PROXY_MAX_RETRIES", 3),
+            )
 
-            pw_proxy = None
-            httpx_proxy = None
-            if proxy_setting:
-                if isinstance(proxy_setting, str):
-                    httpx_proxy = proxy_setting
-                    if "@" in proxy_setting:
-                        scheme_part, rest = proxy_setting.split("://", 1) if "://" in proxy_setting else ("http", proxy_setting)
-                        user_pass, host_port = rest.split("@", 1) if "@" in rest else ("", rest)
-                        user, password = user_pass.split(":", 1) if ":" in user_pass else (user_pass, "")
-                        pw_proxy = {
-                            "server": f"{scheme_part}://{host_port}",
-                            "username": user,
-                            "password": password
-                        }
-                    else:
-                        pw_proxy = {"server": proxy_setting}
-                elif isinstance(proxy_setting, dict):
-                    pw_proxy = proxy_setting
-                    httpx_proxy = proxy_setting.get("server")
+            if proxy_pool.has_proxies:
+                await write_log(
+                    f"Initialized Rotating Proxy Pool ({proxy_pool.total_proxies} proxies | "
+                    f"Auto-Failover on 403/429 blocks enabled)",
+                    "info"
+                )
 
             # Platform auto-detection
             from app.scrapers.scraper_registry import ScraperRegistry
@@ -700,7 +689,7 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                     max_products=max_products,
                     max_depth=max_depth,
                     request_delay=request_delay,
-                    proxy=pw_proxy,
+                    proxy_pool=proxy_pool,
                     on_log=write_log,
                     on_product_batch=save_products,
                     on_page_done=on_page_done,
@@ -713,7 +702,7 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                     max_products=max_products,
                     max_depth=max_depth,
                     request_delay=request_delay,
-                    proxy=httpx_proxy,
+                    proxy_pool=proxy_pool,
                     on_log=write_log,
                     on_product_batch=save_products,
                     on_page_done=on_page_done,
@@ -740,3 +729,38 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                     await db.commit()
             except Exception:
                 pass
+
+
+@router.get("/proxies/status")
+async def get_proxy_pool_status():
+    """
+    Get live health metrics, rotation status, and active proxies in the pool.
+    """
+    from app.core.proxy_manager import build_proxy_pool
+    pool = build_proxy_pool()
+    return pool.get_status_summary()
+
+
+@router.post("/proxies/test")
+async def test_proxy_pool(payload: Optional[Dict[str, Any]] = None):
+    """
+    Test connectivity of custom proxies or the currently configured pool.
+    Returns latency, HTTP status, and verified exit IP.
+    """
+    from app.core.proxy_manager import build_proxy_pool
+    proxies = payload.get("proxies") if payload else None
+    pool = build_proxy_pool(explicit_proxies=proxies)
+    if not pool.has_proxies:
+        return {
+            "success": False,
+            "message": "No proxies provided or configured.",
+            "results": []
+        }
+    results = await pool.test_all()
+    successful = [r for r in results if r.get("success")]
+    return {
+        "success": len(successful) > 0,
+        "total": len(results),
+        "active": len(successful),
+        "results": results
+    }

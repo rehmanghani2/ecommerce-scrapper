@@ -115,6 +115,20 @@ export const scraperService = {
     const response = await apiGet('/scraper/supported-platforms')
     return response.platforms
   },
+
+  /**
+   * Get proxy pool health and rotation status
+   */
+  async getProxyStatus() {
+    return await apiGet('/scraper/proxies/status')
+  },
+
+  /**
+   * Test proxy pool connectivity and latency
+   */
+  async testProxyPool(proxies = null) {
+    return await apiPost('/scraper/proxies/test', { proxies })
+  },
 }
 
 export default scraperService

@@ -282,6 +282,7 @@ class HttpxScraper:
         max_depth: int = 3,
         request_delay: float = 1.0,
         proxy: Optional[str] = None,
+        proxy_pool: Optional[Any] = None,
         on_log: Optional[Callable[[str, str], Awaitable[None]]] = None,
         on_product_batch: Optional[Callable[[List[Dict]], Awaitable[None]]] = None,
         on_page_done: Optional[Callable[[str, bool, int], Awaitable[None]]] = None,
@@ -293,6 +294,14 @@ class HttpxScraper:
         self.max_depth = max_depth
         self.request_delay = request_delay
         self.proxy = proxy
+
+        if proxy_pool:
+            self.proxy_pool = proxy_pool
+        elif proxy:
+            from app.core.proxy_manager import ProxyPoolManager
+            self.proxy_pool = ProxyPoolManager([proxy])
+        else:
+            self.proxy_pool = None
 
         parsed = urlparse(start_url)
         self.allowed_domain = parsed.netloc
@@ -318,74 +327,113 @@ class HttpxScraper:
         await self._log(f"Detected platform: {self.platform}")
         await self._log(f"Max pages: {self.max_pages} | Max products: {self.max_products}")
 
+        if self.proxy_pool and self.proxy_pool.has_proxies:
+            await self._log(
+                f"  ↳ Rotating Proxy Pool active ({self.proxy_pool.total_proxies} proxies | Failover: {self.proxy_pool.failover_enabled})"
+            )
+
         pages_scraped = 0
         timeout = httpx.Timeout(30.0)
 
-        client_kwargs = {
-            "headers": HEADERS,
-            "timeout": timeout,
-            "follow_redirects": True,
-            "verify": False,
-        }
-        if self.proxy:
-            client_kwargs["proxy"] = self.proxy
-            await self._log(f"  ↳ Using HTTPX proxy: {self.proxy}")
+        while self._queue and pages_scraped < self.max_pages and self._total_products < self.max_products:
+            url, depth = self._queue.pop(0)
 
-        async with httpx.AsyncClient(**client_kwargs) as client:
+            if url in self._visited:
+                continue
+            self._visited.add(url)
 
-            while self._queue and pages_scraped < self.max_pages and self._total_products < self.max_products:
-                url, depth = self._queue.pop(0)
+            await self._log(f"[{pages_scraped + 1}/{self.max_pages}] Fetching: {url}")
 
-                if url in self._visited:
-                    continue
-                self._visited.add(url)
+            # Fetch with proxy rotation & automated failover on 403 / 429
+            response = None
+            max_retries = self.proxy_pool.max_retries if (self.proxy_pool and self.proxy_pool.failover_enabled) else 1
+            attempt = 0
 
-                await self._log(f"[{pages_scraped + 1}/{self.max_pages}] Fetching: {url}")
+            while attempt < max_retries:
+                attempt += 1
+                curr_node = self.proxy_pool.get_next_proxy() if self.proxy_pool else None
+                client_kwargs = {
+                    "headers": HEADERS,
+                    "timeout": timeout,
+                    "follow_redirects": True,
+                    "verify": False,
+                }
+                if curr_node:
+                    client_kwargs["proxy"] = curr_node.to_httpx_proxy()
 
                 try:
-                    response = await client.get(url)
+                    async with httpx.AsyncClient(**client_kwargs) as client:
+                        response = await client.get(url)
+
                     status = response.status_code
 
-                    if status >= 400:
-                        await self._log(f"  ↳ HTTP {status} — skipping", "warning")
-                        if self.on_page_done:
-                            await self.on_page_done(url, False, pages_scraped)
+                    # If blocked by anti-bot or rate limited, failover to next proxy
+                    if status in (403, 429, 503) and self.proxy_pool and self.proxy_pool.failover_enabled and attempt < max_retries:
+                        self.proxy_pool.report_failure(curr_node, status)
+                        next_node = self.proxy_pool.get_next_proxy()
+                        next_label = next_node.masked() if next_node else "Direct"
+                        curr_label = curr_node.masked() if curr_node else "Direct"
+                        await self._log(
+                            f"  ↳ Blocked (HTTP {status}) using {curr_label}. "
+                            f"Auto-switching to {next_label} (Attempt {attempt}/{max_retries})...",
+                            "warning"
+                        )
+                        await asyncio.sleep(1.0)
                         continue
 
-                    html = response.text
-                    pages_scraped += 1
+                    if curr_node and status < 400:
+                        self.proxy_pool.report_success(curr_node)
+                    break
 
-                    # Extract products
-                    products = _extract_products(html, url, self.selectors)
-                    if products:
-                        await self._log(f"  ↳ Found {len(products)} products on page")
-                        if self.on_product_batch:
-                            await self.on_product_batch(products)
-                        self._total_products += len(products)
+                except Exception as req_err:
+                    if self.proxy_pool and self.proxy_pool.failover_enabled and attempt < max_retries:
+                        self.proxy_pool.report_failure(curr_node, error_msg=str(req_err))
+                        next_node = self.proxy_pool.get_next_proxy()
+                        next_label = next_node.masked() if next_node else "Direct"
+                        curr_label = curr_node.masked() if curr_node else "Direct"
+                        await self._log(
+                            f"  ↳ Proxy connection error ({req_err}) on {curr_label}. "
+                            f"Auto-switching to {next_label} (Attempt {attempt}/{max_retries})...",
+                            "warning"
+                        )
+                        await asyncio.sleep(1.0)
+                        continue
                     else:
-                        await self._log(f"  ↳ No products found on this page", "debug")
+                        await self._log(f"  ↳ Request error for {url}: {req_err}", "warning")
+                        break
 
-                    # Extract links if not max depth
-                    if depth < self.max_depth:
-                        links = _extract_links(html, url, self.allowed_domain)
-                        new_links = [l for l in links if l not in self._visited]
-                        await self._log(f"  ↳ Found {len(new_links)} new links to follow", "debug")
-                        for link in new_links:
-                            self._queue.append((link, depth + 1))
+            if not response or response.status_code >= 400:
+                err_code = response.status_code if response else "Error"
+                await self._log(f"  ↳ HTTP {err_code} — skipping", "warning")
+                if self.on_page_done:
+                    await self.on_page_done(url, False, pages_scraped)
+                continue
 
-                    if self.on_page_done:
-                        await self.on_page_done(url, True, pages_scraped)
+            html = response.text
+            pages_scraped += 1
 
-                    await asyncio.sleep(self.request_delay)
+            # Extract products
+            products = _extract_products(html, url, self.selectors)
+            if products:
+                await self._log(f"  ↳ Found {len(products)} products on page")
+                if self.on_product_batch:
+                    await self.on_product_batch(products)
+                self._total_products += len(products)
+            else:
+                await self._log(f"  ↳ No products found on this page", "debug")
 
-                except httpx.TimeoutException:
-                    await self._log(f"  ↳ Timeout fetching {url}", "warning")
-                    if self.on_page_done:
-                        await self.on_page_done(url, False, pages_scraped)
-                except Exception as e:
-                    await self._log(f"  ↳ Error: {e}", "error")
-                    if self.on_page_done:
-                        await self.on_page_done(url, False, pages_scraped)
+            # Extract links if not max depth
+            if depth < self.max_depth:
+                links = _extract_links(html, url, self.allowed_domain)
+                new_links = [l for l in links if l not in self._visited]
+                await self._log(f"  ↳ Found {len(new_links)} new links to follow", "debug")
+                for link in new_links:
+                    self._queue.append((link, depth + 1))
+
+            if self.on_page_done:
+                await self.on_page_done(url, True, pages_scraped)
+
+            await asyncio.sleep(self.request_delay)
 
         await self._log(
             f"Scrape complete. Pages: {pages_scraped}, Products: {self._total_products}"

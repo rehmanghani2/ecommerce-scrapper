@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     USE_PROXY: bool = False
     PROXY_LIST: Optional[str] = None
     SCRAPER_PROXY: Optional[str] = Field(default=None)
+    PROXY_POOL_LIST: Optional[str] = Field(default=None, env="PROXY_POOL_LIST")
+    PROXY_FAILOVER_ENABLED: bool = Field(default=True, env="PROXY_FAILOVER_ENABLED")
+    PROXY_MAX_RETRIES: int = Field(default=3, env="PROXY_MAX_RETRIES")
     
     # Browser Settings
     HEADLESS: bool = True
