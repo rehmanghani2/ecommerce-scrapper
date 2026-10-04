@@ -307,8 +307,9 @@ async def get_supported_platforms():
 async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]):
     """Background task to run the scraper using httpx + BeautifulSoup."""
     from datetime import datetime, timezone
+    from sqlalchemy import select
     from app.models.database import get_db_context
-    from app.models.product import Product
+    from app.models.product import Product, PriceHistory
     from app.core.httpx_scraper import HttpxScraper
 
     async with get_db_context() as db:
@@ -339,7 +340,7 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                 logger.error(f"write_log error: {e}")
 
         async def save_products(products_data: list):
-            """Save a batch of scraped products to DB."""
+            """Save a batch of scraped products to DB, tracking price changes and history."""
             try:
                 async with get_db_context() as save_db:
                     j = await save_db.get(Job, job_id)
@@ -349,17 +350,81 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                     saved = 0
                     for data in products_data:
                         try:
-                            p = Product(
-                                job_id=job_id,
-                                name=data.get("name", "Unknown")[:500],
-                                url=data.get("url"),
-                                price=data.get("price"),
-                                price_text=data.get("price_text"),
-                                image_url=data.get("image_url"),
-                                source_domain=domain,
-                            )
-                            save_db.add(p)
-                            saved += 1
+                            p_url = data.get("url")
+                            raw_price = data.get("price")
+                            p_price = float(raw_price) if raw_price is not None else None
+                            p_text = data.get("price_text")
+                            p_curr = data.get("currency") or "USD"
+
+                            # Check for existing product by URL
+                            existing_p = None
+                            if p_url:
+                                stmt = select(Product).where(Product.url == p_url).limit(1)
+                                res = await save_db.execute(stmt)
+                                existing_p = res.scalar_one_or_none()
+
+                            if existing_p:
+                                # Product exists: calculate price changes & record history snapshot
+                                old_price = float(existing_p.price) if existing_p.price is not None else None
+                                if p_price is not None:
+                                    if old_price is not None and old_price != p_price:
+                                        existing_p.previous_price = existing_p.price
+                                        change = round(p_price - old_price, 2)
+                                        existing_p.price_change = change
+                                        if old_price > 0:
+                                            existing_p.price_change_percentage = round((change / old_price) * 100, 2)
+                                    
+                                    existing_p.price = p_price
+                                    existing_p.lowest_price = min(float(existing_p.lowest_price or p_price), p_price)
+                                    existing_p.highest_price = max(float(existing_p.highest_price or p_price), p_price)
+
+                                if p_text:
+                                    existing_p.price_text = p_text
+                                if data.get("image_url"):
+                                    existing_p.image_url = data.get("image_url")
+                                existing_p.job_id = job_id
+                                existing_p.scraped_at = datetime.now(timezone.utc)
+
+                                if p_price is not None:
+                                    ph = PriceHistory(
+                                        product_id=existing_p.id,
+                                        job_id=job_id,
+                                        price=p_price,
+                                        price_text=p_text,
+                                        currency=p_curr,
+                                    )
+                                    save_db.add(ph)
+                                saved += 1
+                            else:
+                                # New product: insert and create initial price history
+                                p = Product(
+                                    job_id=job_id,
+                                    name=data.get("name", "Unknown")[:500],
+                                    url=p_url or f"{url}#{saved}",
+                                    price=p_price,
+                                    previous_price=None,
+                                    price_change=0,
+                                    price_change_percentage=0,
+                                    lowest_price=p_price,
+                                    highest_price=p_price,
+                                    price_text=p_text,
+                                    currency=p_curr,
+                                    image_url=data.get("image_url"),
+                                    source_domain=domain,
+                                )
+                                save_db.add(p)
+                                await save_db.flush()
+
+                                if p_price is not None:
+                                    ph = PriceHistory(
+                                        product_id=p.id,
+                                        job_id=job_id,
+                                        price=p_price,
+                                        price_text=p_text,
+                                        currency=p_curr,
+                                    )
+                                    save_db.add(ph)
+                                saved += 1
                         except Exception as ex:
                             logger.error(f"Error saving individual product: {ex}")
                     if saved:

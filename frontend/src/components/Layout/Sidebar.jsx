@@ -5,6 +5,7 @@ import {
   GlobeAltIcon,
   BriefcaseIcon,
   CubeIcon,
+  ClockIcon,
   ArrowDownTrayIcon,
   Cog6ToothIcon,
   ChevronLeftIcon,
@@ -17,6 +18,7 @@ const navigation = [
   { name: 'Scraper', href: '/scraper', icon: GlobeAltIcon },
   { name: 'Jobs', href: '/jobs', icon: BriefcaseIcon },
   { name: 'Products', href: '/products', icon: CubeIcon },
+  { name: 'Schedules', href: '/schedules', icon: ClockIcon },
   { name: 'Exports', href: '/exports', icon: ArrowDownTrayIcon },
 ]
 

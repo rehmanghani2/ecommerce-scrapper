@@ -57,7 +57,7 @@ export function ProductCard({ product, onClick }) {
         </h3>
         
         {/* Price */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-lg font-bold text-gray-900 dark:text-white">
             {formatPrice(product.price, product.currency)}
           </span>
@@ -65,6 +65,18 @@ export function ProductCard({ product, onClick }) {
           {product.original_price && product.original_price > product.price && (
             <span className="text-sm text-gray-500 line-through">
               {formatPrice(product.original_price, product.currency)}
+            </span>
+          )}
+
+          {product.price_change < 0 && (
+            <span className="inline-flex items-center text-xs font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
+              ↓ {Math.abs(product.price_change_percentage || 0)}%
+            </span>
+          )}
+
+          {product.price_change > 0 && (
+            <span className="inline-flex items-center text-xs font-semibold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400">
+              ↑ +{product.price_change_percentage}%
             </span>
           )}
         </div>
@@ -128,9 +140,21 @@ export function ProductRow({ product, onClick }) {
       
       {/* Price */}
       <td className="px-4 py-3">
-        <span className="font-medium text-gray-900 dark:text-white">
-          {formatPrice(product.price, product.currency)}
-        </span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-medium text-gray-900 dark:text-white">
+            {formatPrice(product.price, product.currency)}
+          </span>
+          {product.price_change < 0 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
+              ↓ {Math.abs(product.price_change_percentage || 0)}%
+            </span>
+          )}
+          {product.price_change > 0 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400">
+              ↑ +{product.price_change_percentage}%
+            </span>
+          )}
+        </div>
       </td>
       
       {/* Stock */}

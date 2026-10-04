@@ -34,6 +34,11 @@ class Product(Base):
     
     # Pricing
     price = Column(Numeric(12, 2), nullable=True)
+    previous_price = Column(Numeric(12, 2), nullable=True)
+    price_change = Column(Numeric(12, 2), nullable=True)
+    price_change_percentage = Column(Float, nullable=True)
+    lowest_price = Column(Numeric(12, 2), nullable=True)
+    highest_price = Column(Numeric(12, 2), nullable=True)
     original_price = Column(Numeric(12, 2), nullable=True)
     sale_price = Column(Numeric(12, 2), nullable=True)
     currency = Column(String(10), default="GBP")
@@ -98,6 +103,7 @@ class Product(Base):
     # Related data
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
+    price_history = relationship("PriceHistory", back_populates="product", cascade="all, delete-orphan", order_by="desc(PriceHistory.recorded_at)")
     
     # Indexes
     __table_args__ = (
@@ -118,6 +124,11 @@ class Product(Base):
             "name": self.name,
             "description": self.description,
             "price": float(self.price) if self.price else None,
+            "previous_price": float(self.previous_price) if self.previous_price else None,
+            "price_change": float(self.price_change) if self.price_change else None,
+            "price_change_percentage": self.price_change_percentage,
+            "lowest_price": float(self.lowest_price) if self.lowest_price else None,
+            "highest_price": float(self.highest_price) if self.highest_price else None,
             "original_price": float(self.original_price) if self.original_price else None,
             "sale_price": float(self.sale_price) if self.sale_price else None,
             "currency": self.currency,
@@ -139,6 +150,7 @@ class Product(Base):
             "scraped_at": self.scraped_at.isoformat() if self.scraped_at else None,
             "images": [img.to_dict() for img in self.images] if self.images else [],
             "variants": [var.to_dict() for var in self.variants] if self.variants else [],
+            "price_history": [ph.to_dict() for ph in self.price_history] if self.price_history else [],
         }
     
     def to_export_dict(self) -> Dict[str, Any]:
@@ -233,4 +245,32 @@ class ProductVariant(Base):
             "in_stock": self.in_stock,
             "stock_quantity": self.stock_quantity,
             "image_url": self.image_url,
+        }
+
+
+class PriceHistory(Base):
+    """Model representing historical price points for a product."""
+    __tablename__ = "price_history"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), index=True, nullable=False)
+    job_id = Column(Integer, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True)
+
+    price = Column(Numeric(12, 2), nullable=False)
+    price_text = Column(String(100), nullable=True)
+    currency = Column(String(10), default="USD")
+    recorded_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    product = relationship("Product", back_populates="price_history")
+    job = relationship("Job")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "product_id": self.product_id,
+            "job_id": self.job_id,
+            "price": float(self.price) if self.price is not None else None,
+            "price_text": self.price_text,
+            "currency": self.currency,
+            "recorded_at": self.recorded_at.isoformat() if self.recorded_at else None,
         }

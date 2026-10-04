@@ -12,9 +12,8 @@ import os
 
 from app.config import settings
 from app.models.database import init_db, close_db
-from app.api.routes import scraper, jobs, exports, auth, products
-# Add to imports
-from app.api.routes import scraper, jobs, exports, auth, websocket, products
+from app.api.routes import scraper, jobs, exports, auth, websocket, products, schedules
+from app.services.scheduler_service import scheduler_service
 
 # Configure logging
 logging.basicConfig(
@@ -47,10 +46,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Playwright auto-installation warning: {e}")
     
+    # Start automated cron scheduler service
+    scheduler_service.start()
+    
     yield
     
     # Shutdown
     logger.info("Shutting down E-Commerce Scraper Platform...")
+    scheduler_service.stop()
     await close_db()
     logger.info("Database connections closed")
 
@@ -154,6 +157,12 @@ app.include_router(
     products.router,
     prefix=f"{settings.API_PREFIX}/products",
     tags=["Products"]
+)
+
+app.include_router(
+    schedules.router,
+    prefix=f"{settings.API_PREFIX}",
+    tags=["Schedules"]
 )
 
 # Add WebSocket router (add after other routers)

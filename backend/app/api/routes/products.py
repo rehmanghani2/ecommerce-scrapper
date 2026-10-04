@@ -9,9 +9,9 @@ from typing import Optional, List
 import logging
 
 from app.models.database import get_db
-from app.models.product import Product
+from app.models.product import Product, PriceHistory
 from app.schemas.product_schema import (
-    ProductResponse, ProductListResponse, ProductStatistics
+    ProductResponse, ProductListResponse, ProductStatistics, PriceHistorySchema
 )
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,7 @@ async def list_products(
     min_price: Optional[float] = Query(None),
     max_price: Optional[float] = Query(None),
     in_stock: Optional[bool] = Query(None),
+    is_price_drop: Optional[bool] = Query(None),
     domain: Optional[str] = Query(None),
     job_id: Optional[int] = Query(None),
     db: AsyncSession = Depends(get_db)
@@ -40,9 +41,15 @@ async def list_products(
     from sqlalchemy.orm import selectinload
     query = select(Product).options(
         selectinload(Product.images),
-        selectinload(Product.variants)
+        selectinload(Product.variants),
+        selectinload(Product.price_history)
     ).order_by(desc(Product.scraped_at))
     count_query = select(func.count(Product.id))
+    
+    # Apply filters
+    if is_price_drop is True:
+        query = query.where(Product.price_change < 0)
+        count_query = count_query.where(Product.price_change < 0)
     
     # Apply filters
     if search:
@@ -200,12 +207,60 @@ async def get_product_statistics(
     )
 
 
+@router.get("/price-drops", response_model=ProductListResponse)
+async def get_price_drops(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all products that have experienced a price drop, ordered by discount percentage.
+    """
+    from sqlalchemy.orm import selectinload
+    query = (
+        select(Product)
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.variants),
+            selectinload(Product.price_history)
+        )
+        .where(Product.price_change < 0)
+        .order_by(Product.price_change_percentage.asc())
+    )
+    count_query = select(func.count(Product.id)).where(Product.price_change < 0)
+
+    total_result = await db.execute(count_query)
+    total = total_result.scalar() or 0
+
+    offset = (page - 1) * page_size
+    result = await db.execute(query.offset(offset).limit(page_size))
+    products = result.scalars().all()
+
+    pages = (total + page_size - 1) // page_size if total > 0 else 0
+    return ProductListResponse(
+        products=[ProductResponse.model_validate(p) for p in products],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages
+    )
+
+
 @router.get("/{product_id}", response_model=ProductResponse)
 async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
     """
-    Get details for a specific product.
+    Get details for a specific product including its full price history.
     """
-    query = select(Product).where(Product.id == product_id)
+    from sqlalchemy.orm import selectinload
+    query = (
+        select(Product)
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.variants),
+            selectinload(Product.price_history)
+        )
+        .where(Product.id == product_id)
+    )
     result = await db.execute(query)
     product = result.scalar_one_or_none()
     
@@ -213,3 +268,18 @@ async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Product not found")
     
     return ProductResponse.model_validate(product)
+
+
+@router.get("/{product_id}/history", response_model=List[PriceHistorySchema])
+async def get_product_price_history(product_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Get chronological price history snapshots for a product.
+    """
+    query = (
+        select(PriceHistory)
+        .where(PriceHistory.product_id == product_id)
+        .order_by(PriceHistory.recorded_at.asc())
+    )
+    result = await db.execute(query)
+    history = result.scalars().all()
+    return [PriceHistorySchema.model_validate(h) for h in history]

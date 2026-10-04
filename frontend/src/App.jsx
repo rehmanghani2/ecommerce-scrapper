@@ -11,6 +11,7 @@ const Scraper = lazy(() => import('./pages/Scraper'))
 const Jobs = lazy(() => import('./pages/Jobs'))
 const JobDetail = lazy(() => import('./pages/JobDetail'))
 const Products = lazy(() => import('./pages/Products'))
+const Schedules = lazy(() => import('./pages/Schedules'))
 const Exports = lazy(() => import('./pages/Exports'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Login = lazy(() => import('./pages/Login'))
@@ -90,6 +91,7 @@ function App() {
           <Route path="jobs" element={<Jobs />} />
           <Route path="jobs/:jobId" element={<JobDetail />} />
           <Route path="products" element={<Products />} />
+          <Route path="schedules" element={<Schedules />} />
           <Route path="exports" element={<Exports />} />
           <Route path="settings" element={<Settings />} />
         </Route>

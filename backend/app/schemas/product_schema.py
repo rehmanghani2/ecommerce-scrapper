@@ -71,6 +71,20 @@ class ProductCreate(ProductBase):
     raw_data: Optional[Dict[str, Any]] = None
 
 
+class PriceHistorySchema(BaseModel):
+    """Schema for historical price snapshot."""
+    id: int
+    product_id: int
+    job_id: Optional[int] = None
+    price: Optional[float] = None
+    price_text: Optional[str] = None
+    currency: str = "GBP"
+    recorded_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ProductResponse(BaseModel):
     """Schema for product response."""
     
@@ -80,6 +94,11 @@ class ProductResponse(BaseModel):
     name: str
     description: Optional[str]
     price: Optional[float]
+    previous_price: Optional[float] = None
+    price_change: Optional[float] = None
+    price_change_percentage: Optional[float] = None
+    lowest_price: Optional[float] = None
+    highest_price: Optional[float] = None
     original_price: Optional[float]
     sale_price: Optional[float]
     currency: str
@@ -100,6 +119,7 @@ class ProductResponse(BaseModel):
     scraped_at: datetime
     images: List[ProductImageSchema] = []
     variants: List[ProductVariantSchema] = []
+    price_history: List[PriceHistorySchema] = []
     
     class Config:
         from_attributes = True

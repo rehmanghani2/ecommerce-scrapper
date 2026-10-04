@@ -17,13 +17,15 @@ import {
   Modal,
   ModalFooter,
 } from '@/components/Common'
-import { ProductCard, ProductRow, ProductFilters, ExportButton } from '@/components/DataViewer'
+import { ProductCard, ProductRow, ProductFilters, ExportButton, PriceHistoryModal } from '@/components/DataViewer'
 import { apiGet } from '@/services/api'
+import { ArrowTrendingDownIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 
 export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [viewMode, setViewMode] = useState('grid')
   const [selectedProduct, setSelectedProduct] = useState(null)
+  const [historyProduct, setHistoryProduct] = useState(null)
 
   // Parse filters from URL
   const filters = {
@@ -34,6 +36,7 @@ export default function Products() {
     max_price: searchParams.get('max_price') || '',
     in_stock: searchParams.get('in_stock') || '',
     domain: searchParams.get('domain') || '',
+    is_price_drop: searchParams.get('is_price_drop') || '',
   }
   const page = parseInt(searchParams.get('page') || '1', 10)
   const pageSize = viewMode === 'grid' ? 12 : 20
@@ -93,6 +96,23 @@ export default function Products() {
         </div>
         
         <div className="flex items-center gap-3">
+          {/* Price Drops Quick Filter */}
+          <button
+            type="button"
+            onClick={() => handleFilterChange({
+              is_price_drop: filters.is_price_drop === 'true' ? '' : 'true'
+            })}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
+              filters.is_price_drop === 'true'
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+            )}
+          >
+            <ArrowTrendingDownIcon className="w-4 h-4 text-emerald-500" />
+            Price Drops Only
+          </button>
+
           {/* View toggle */}
           <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
             <button
@@ -223,12 +243,20 @@ export default function Products() {
         product={selectedProduct}
         isOpen={!!selectedProduct}
         onClose={() => setSelectedProduct(null)}
+        onOpenHistory={(p) => setHistoryProduct(p)}
+      />
+
+      {/* Price History & Trend Modal */}
+      <PriceHistoryModal
+        product={historyProduct}
+        isOpen={!!historyProduct}
+        onClose={() => setHistoryProduct(null)}
       />
     </div>
   )
 }
 
-function ProductDetailModal({ product, isOpen, onClose }) {
+function ProductDetailModal({ product, isOpen, onClose, onOpenHistory }) {
   if (!product) return null
 
   return (
@@ -316,6 +344,16 @@ function ProductDetailModal({ product, isOpen, onClose }) {
       <ModalFooter>
         <Button variant="secondary" onClick={onClose}>
           Close
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            onClose()
+            onOpenHistory(product)
+          }}
+        >
+          <ChartBarIcon className="w-4 h-4 mr-1.5 text-primary-600" />
+          Price History & Trends
         </Button>
         <a href={product.url} target="_blank" rel="noopener noreferrer">
           <Button>View on Website</Button>
