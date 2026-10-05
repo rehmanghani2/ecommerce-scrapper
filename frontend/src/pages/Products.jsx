@@ -386,6 +386,62 @@ function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenSyn
               </p>
             </div>
           )}
+
+          {/* Product Variants & Inventory Section */}
+          {product.variants && product.variants.length > 0 && (
+            <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-1.5 text-sm">
+                  <span>Product Variants & Inventory</span>
+                  <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-primary-100 text-primary-800 dark:bg-primary-950/60 dark:text-primary-300">
+                    {product.variants.length} options
+                  </span>
+                </h4>
+              </div>
+              
+              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                {product.variants.map((v, idx) => (
+                  <div
+                    key={v.id || idx}
+                    className="p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-gray-900 dark:text-white truncate">
+                        {v.name}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5 text-gray-500 dark:text-gray-400 font-mono text-[11px]">
+                        {v.sku && <span>SKU: {v.sku}</span>}
+                        {v.stock_quantity !== null && v.stock_quantity !== undefined && (
+                          <span>Qty: {v.stock_quantity}</span>
+                        )}
+                        {v.attributes && Object.keys(v.attributes).length > 0 && (
+                          <span className="text-gray-600 dark:text-gray-300">
+                            {Object.entries(v.attributes).map(([k, val]) => `${k}: ${val}`).join(' • ')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      {v.price !== null && v.price !== undefined ? (
+                        <p className="font-semibold text-gray-900 dark:text-white">
+                          £{v.price}
+                        </p>
+                      ) : null}
+                      <span className={cn(
+                        "inline-block px-1.5 py-0.5 rounded text-[10px] font-medium mt-0.5",
+                        v.in_stock
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400"
+                          : "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400"
+                      )}>
+                        {v.stock_status || (v.in_stock ? 'In Stock' : 'Out of Stock')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

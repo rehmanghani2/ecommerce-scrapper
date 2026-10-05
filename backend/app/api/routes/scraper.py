@@ -780,6 +780,30 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                                         currency=p_curr,
                                     )
                                     save_db.add(ph)
+
+                                # Save variants for new product
+                                raw_variants = data.get("variants") or []
+                                if raw_variants:
+                                    from app.models.product import ProductVariant
+                                    for v_item in raw_variants:
+                                        if isinstance(v_item, dict) and (v_item.get("name") or v_item.get("title")):
+                                            v_name = v_item.get("name") or v_item.get("title")
+                                            v_price = v_item.get("price")
+                                            v_orig = v_item.get("original_price") or v_item.get("compare_at_price")
+                                            variant_record = ProductVariant(
+                                                product_id=p.id,
+                                                variant_id=str(v_item.get("variant_id") or v_item.get("id") or ""),
+                                                sku=v_item.get("sku"),
+                                                name=v_name[:255],
+                                                attributes=v_item.get("attributes") or {},
+                                                price=float(v_price) if v_price is not None else None,
+                                                original_price=float(v_orig) if v_orig is not None else None,
+                                                in_stock=bool(v_item.get("in_stock", v_item.get("available", True))),
+                                                stock_quantity=v_item.get("stock_quantity") or v_item.get("inventory_quantity"),
+                                                image_url=v_item.get("image_url"),
+                                            )
+                                            save_db.add(variant_record)
+
                                 saved += 1
                         except Exception as ex:
                             logger.error(f"Error saving individual product: {ex}")

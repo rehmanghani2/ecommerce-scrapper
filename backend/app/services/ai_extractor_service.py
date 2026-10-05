@@ -99,7 +99,10 @@ class AIExtractorService:
             "- description (string or null): Brief description or features\n"
             "- rating (number or null): Star rating (0.0 to 5.0)\n"
             "- review_count (number or null): Total reviews\n"
-            "- variants (array of objects, optional): variants with attributes (size, color, price)"
+            "- variants (array of objects, optional): all variations (sizes, colors, styles). Each variant must have: "
+            "'name' (string, e.g. 'Red / XL'), 'sku' (string or null), 'price' (number or null), "
+            "'in_stock' (boolean), 'stock_quantity' (number or null), 'stock_status' (string e.g. 'In Stock', 'Only 3 left', 'Out of Stock'), "
+            "'attributes' (object e.g. {'color': 'Red', 'size': 'XL'}), 'image_url' (string or null)"
         )
 
         prompt = f"Extract all products from this e-commerce page HTML (Base URL: {base_url}):\n\n{cleaned_html}"

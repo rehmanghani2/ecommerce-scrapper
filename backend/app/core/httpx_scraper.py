@@ -414,6 +414,25 @@ class HttpxScraper:
 
             # Extract products
             products = _extract_products(html, url, self.selectors)
+            
+            # If products were found or this looks like a product detail page, extract variants
+            if products:
+                try:
+                    from app.services.variant_extractor_service import variant_extractor_service
+                    page_variants = variant_extractor_service.extract_from_html(html)
+                    if page_variants:
+                        # If single product on page (detail page), associate all variants with it
+                        if len(products) == 1:
+                            products[0]["variants"] = page_variants
+                        else:
+                            # Try associating by name similarity or container
+                            for p in products:
+                                matching_v = [v for v in page_variants if v["name"].lower() in p["name"].lower() or p["name"].lower() in v["name"].lower()]
+                                if matching_v:
+                                    p["variants"] = matching_v
+                except Exception as var_err:
+                    logger.debug(f"Variant extraction error: {var_err}")
+
             if products:
                 await self._log(f"  ↳ Found {len(products)} products on page")
                 if self.on_product_batch:

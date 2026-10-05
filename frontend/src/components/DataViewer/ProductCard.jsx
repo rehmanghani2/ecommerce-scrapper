@@ -102,14 +102,21 @@ export function ProductCard({ product, onClick, selected = false, onToggleSelect
           )}
         </div>
         
-        {/* Category */}
-        {product.category && (
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 truncate">
-            {product.category_path || product.category}
-          </p>
-        )}
-      </div>
-    </Card>
+          {/* Category & Variants count */}
+          <div className="flex items-center justify-between gap-2 mt-2">
+            {product.category ? (
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                {product.category_path || product.category}
+              </p>
+            ) : <span />}
+            {product.variants && product.variants.length > 0 && (
+              <span className="shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                {product.variants.length} vars
+              </span>
+            )}
+          </div>
+        </div>
+      </Card>
   )
 }
 

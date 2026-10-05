@@ -193,6 +193,13 @@ async def get_product_statistics(
         image_query = image_query.where(Product.source_domain == domain)
     image_count = (await db.execute(image_query)).scalar() or 0
     
+    # Count with variants
+    from app.models.product import ProductVariant
+    variant_query = select(func.count(distinct(ProductVariant.product_id)))
+    if domain:
+        variant_query = variant_query.join(Product, Product.id == ProductVariant.product_id).where(Product.source_domain == domain)
+    variant_count = (await db.execute(variant_query)).scalar() or 0
+
     return ProductStatistics(
         total_products=total,
         unique_categories=cats,
@@ -203,7 +210,7 @@ async def get_product_statistics(
         in_stock_count=stock_count,
         out_of_stock_count=total - stock_count,
         with_images_count=image_count,
-        with_variants_count=0  # TODO: Implement if variants are tracked
+        with_variants_count=variant_count,
     )
 
 
