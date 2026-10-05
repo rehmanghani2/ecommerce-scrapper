@@ -654,7 +654,22 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                             raw_price = data.get("price")
                             p_price = float(raw_price) if raw_price is not None else None
                             p_text = data.get("price_text")
-                            p_curr = data.get("currency") or "USD"
+                            p_curr = data.get("currency")
+
+                            # Detect currency from raw price text if missing
+                            from app.services.currency_service import currency_service
+                            if not p_curr or p_curr == "USD":
+                                p_curr = currency_service.detect_currency(p_text, default=p_curr or "USD")
+
+                            # Normalize price to target currency
+                            p_norm_price, p_rate = None, None
+                            p_target_curr = getattr(settings, "TARGET_CURRENCY", "USD")
+                            if p_price is not None and getattr(settings, "CURRENCY_AUTO_NORMALIZE", True):
+                                p_norm_price, p_rate = await currency_service.convert_price(
+                                    amount=p_price,
+                                    from_currency=p_curr,
+                                    to_currency=p_target_curr
+                                )
 
                             # Check for existing product by URL
                             existing_p = None
@@ -699,6 +714,10 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                                     existing_p.price_text = p_text
                                 if data.get("image_url"):
                                     existing_p.image_url = data.get("image_url")
+                                existing_p.currency = p_curr
+                                existing_p.normalized_price = p_norm_price
+                                existing_p.normalized_currency = p_target_curr
+                                existing_p.exchange_rate = p_rate
                                 existing_p.job_id = job_id
                                 existing_p.scraped_at = datetime.now(timezone.utc)
 
@@ -726,6 +745,9 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                                     highest_price=p_price,
                                     price_text=p_text,
                                     currency=p_curr,
+                                    normalized_price=p_norm_price,
+                                    normalized_currency=p_target_curr,
+                                    exchange_rate=p_rate,
                                     image_url=data.get("image_url"),
                                     source_domain=domain,
                                 )

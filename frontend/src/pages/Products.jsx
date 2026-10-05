@@ -339,12 +339,19 @@ function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenSyn
           )}
           
           <div>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {product.price ? `£${product.price}` : 'Price not available'}
-            </p>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {product.currency || '£'} {product.price !== null && product.price !== undefined ? product.price : 'Price not available'}
+              </p>
+              {product.normalized_price && product.normalized_currency && product.normalized_currency !== product.currency && (
+                <span className="text-sm font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
+                  ≈ {product.normalized_currency} {product.normalized_price}
+                </span>
+              )}
+            </div>
             {product.original_price && product.original_price > product.price && (
               <p className="text-sm text-gray-500 line-through">
-                £{product.original_price}
+                {product.currency || '£'} {product.original_price}
               </p>
             )}
           </div>

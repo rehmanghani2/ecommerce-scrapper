@@ -12,7 +12,7 @@ import os
 
 from app.config import settings
 from app.models.database import init_db, close_db
-from app.api.routes import scraper, jobs, exports, auth, websocket, products, schedules, integrations, alerts, cloudinary, s3, supabase
+from app.api.routes import scraper, jobs, exports, auth, websocket, products, schedules, integrations, alerts, cloudinary, s3, supabase, currency
 from app.services.scheduler_service import scheduler_service
 
 # Configure logging
@@ -193,6 +193,12 @@ app.include_router(
     supabase.router,
     prefix=f"{settings.API_PREFIX}",
     tags=["Supabase Cloud Storage"]
+)
+
+app.include_router(
+    currency.router,
+    prefix=f"{settings.API_PREFIX}",
+    tags=["Currency Normalization"]
 )
 
 # Add WebSocket router (add after other routers)

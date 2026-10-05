@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     EXPORT_PATH: str = "./exports"
     MAX_EXPORT_ROWS: int = 100000
     
+    # Currency Normalization Settings
+    TARGET_CURRENCY: str = Field(default="USD", env="TARGET_CURRENCY")  # Default target currency: USD, EUR, GBP, PKR, CAD, AUD
+    CURRENCY_API_KEY: Optional[str] = Field(default=None, env="CURRENCY_API_KEY")  # Optional API key for live exchange rates
+    CURRENCY_AUTO_NORMALIZE: bool = Field(default=True, env="CURRENCY_AUTO_NORMALIZE")
+    
     # Logging
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"

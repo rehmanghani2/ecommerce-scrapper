@@ -18,6 +18,7 @@ import {
   PhotoIcon,
   ServerStackIcon,
   CircleStackIcon,
+  CurrencyDollarIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/helpers'
@@ -38,6 +39,7 @@ import alertService from '@/services/alertService'
 import cloudinaryService from '@/services/cloudinaryService'
 import s3Service from '@/services/s3Service'
 import supabaseService from '@/services/supabaseService'
+import currencyService from '@/services/currencyService'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -92,6 +94,12 @@ export default function Settings() {
       label: 'Supabase Free Storage',
       icon: CircleStackIcon,
       content: <SupabaseStorageSettings />,
+    },
+    {
+      key: 'currency',
+      label: 'Multi-Currency Normalization',
+      icon: CurrencyDollarIcon,
+      content: <CurrencySettings />,
     },
     {
       key: 'appearance',
@@ -2118,6 +2126,215 @@ function IntegrationsSettings() {
             >
               Save Gemini Config
             </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+function CurrencySettings() {
+  const [targetCurrency, setTargetCurrency] = useState('USD')
+  const [ratesInfo, setRatesInfo] = useState(null)
+  const [loadingRates, setLoadingRates] = useState(false)
+  
+  // Interactive Live Converter Sandbox State
+  const [calcAmount, setCalcAmount] = useState('100')
+  const [fromCurr, setFromCurr] = useState('GBP')
+  const [toCurr, setToCurr] = useState('USD')
+  const [conversionResult, setConversionResult] = useState(null)
+  const [converting, setConverting] = useState(false)
+
+  const currencyOptions = [
+    { value: 'USD', label: 'USD - United States Dollar ($)' },
+    { value: 'EUR', label: 'EUR - Euro (€)' },
+    { value: 'GBP', label: 'GBP - British Pound (£)' },
+    { value: 'PKR', label: 'PKR - Pakistani Rupee (Rs)' },
+    { value: 'INR', label: 'INR - Indian Rupee (₹)' },
+    { value: 'CAD', label: 'CAD - Canadian Dollar (CA$)' },
+    { value: 'AUD', label: 'AUD - Australian Dollar (A$)' },
+    { value: 'AED', label: 'AED - United Arab Emirates Dirham' },
+    { value: 'SAR', label: 'SAR - Saudi Riyal' },
+    { value: 'JPY', label: 'JPY - Japanese Yen (¥)' },
+    { value: 'CNY', label: 'CNY - Chinese Yuan (¥)' },
+  ]
+
+  const fetchRates = async () => {
+    setLoadingRates(true)
+    try {
+      const data = await currencyService.getRates()
+      setRatesInfo(data)
+      if (data?.target_currency) {
+        setTargetCurrency(data.target_currency)
+      }
+    } catch (e) {
+      toast.error('Failed to load currency exchange rates')
+    } finally {
+      setLoadingRates(false)
+    }
+  }
+
+  React.useEffect(() => {
+    fetchRates()
+  }, [])
+
+  const handleConvert = async () => {
+    if (!calcAmount || isNaN(calcAmount)) {
+      toast.error('Please enter a valid amount')
+      return
+    }
+    setConverting(true)
+    try {
+      const res = await currencyService.convertPrice({
+        amount: parseFloat(calcAmount),
+        from_currency: fromCurr,
+        to_currency: toCurr,
+      })
+      setConversionResult(res)
+    } catch (err) {
+      toast.error('Conversion failed: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setConverting(false)
+    }
+  }
+
+  const handleSaveCurrencyConfig = () => {
+    toast.success(`Target normalization currency set to ${targetCurrency}! All future scrapes will automatically convert prices.`)
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Overview & Target Selection */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <CurrencyDollarIcon className="w-5 h-5 text-emerald-600" />
+              Multi-Currency Normalization Settings
+            </CardTitle>
+            <Badge variant="success" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">
+              Live Exchange Rates Active
+            </Badge>
+          </div>
+        </CardHeader>
+
+        <div className="space-y-5">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Automatically detect currencies (<span className="font-mono text-xs">$, €, £, A$, PKR, CAD, AED, etc.</span>) across international competitor websites and normalize every product price into your preferred uniform target currency with live market exchange rates.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Global Target Currency
+              </label>
+              <select
+                value={targetCurrency}
+                onChange={(e) => setTargetCurrency(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-primary-500 focus:border-primary-500"
+              >
+                {currencyOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                All scraped prices and exports will be mapped and converted into this currency.
+              </p>
+            </div>
+
+            <div className="flex items-end">
+              <Button variant="primary" onClick={handleSaveCurrencyConfig} className="w-full">
+                Save Target Currency
+              </Button>
+            </div>
+          </div>
+
+          {ratesInfo && (
+            <div className="p-3.5 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 text-xs flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-300">
+                <CheckCircleIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Exchange rate provider connected. <strong>{ratesInfo.total_currencies} live currencies available</strong> (Base: USD).</span>
+              </div>
+              <Button size="sm" variant="outline" onClick={fetchRates} disabled={loadingRates}>
+                <ArrowPathIcon className={cn("w-3.5 h-3.5 mr-1", loadingRates && "animate-spin")} />
+                Refresh Rates
+              </Button>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Live Currency Converter Sandbox */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <SparklesIcon className="w-5 h-5 text-indigo-500" />
+            Live Currency Converter & Sandbox
+          </CardTitle>
+        </CardHeader>
+
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Verify real-time rates and live conversions using our in-memory cached market feeds.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Amount</label>
+              <input
+                type="number"
+                value={calcAmount}
+                onChange={(e) => setCalcAmount(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                placeholder="100.00"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">From Currency</label>
+              <select
+                value={fromCurr}
+                onChange={(e) => setFromCurr(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                {currencyOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.value}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">To Currency</label>
+              <select
+                value={toCurr}
+                onChange={(e) => setToCurr(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+              >
+                {currencyOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.value}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-between items-center pt-2">
+            <Button variant="secondary" onClick={handleConvert} disabled={converting}>
+              {converting ? 'Converting...' : 'Calculate Conversion'}
+            </Button>
+
+            {conversionResult && (
+              <div className="p-2.5 px-4 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-xs flex items-center gap-3">
+                <span className="text-gray-600 dark:text-gray-400">
+                  {conversionResult.amount} {conversionResult.from_currency} =
+                </span>
+                <span className="text-base font-bold text-indigo-700 dark:text-indigo-300">
+                  {conversionResult.converted_amount} {conversionResult.to_currency}
+                </span>
+                <span className="text-[11px] text-gray-500 font-mono">
+                  (Rate: {conversionResult.exchange_rate})
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </Card>

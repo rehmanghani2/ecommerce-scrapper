@@ -102,6 +102,9 @@ class ProductResponse(BaseModel):
     original_price: Optional[float]
     sale_price: Optional[float]
     currency: str
+    normalized_price: Optional[float] = None
+    normalized_currency: Optional[str] = None
+    exchange_rate: Optional[float] = None
     in_stock: bool
     stock_quantity: Optional[int]
     url: str

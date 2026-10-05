@@ -42,6 +42,9 @@ class Product(Base):
     original_price = Column(Numeric(12, 2), nullable=True)
     sale_price = Column(Numeric(12, 2), nullable=True)
     currency = Column(String(10), default="GBP")
+    normalized_price = Column(Numeric(12, 2), nullable=True)  # Price converted to user's target currency
+    normalized_currency = Column(String(10), nullable=True)  # Target currency code e.g. USD
+    exchange_rate = Column(Float, nullable=True)  # Rate used for conversion
     price_text = Column(String(100), nullable=True)  # Original price string
     discount_percentage = Column(Float, nullable=True)
     
@@ -138,6 +141,9 @@ class Product(Base):
             "original_price": float(self.original_price) if self.original_price else None,
             "sale_price": float(self.sale_price) if self.sale_price else None,
             "currency": self.currency,
+            "normalized_price": float(self.normalized_price) if self.normalized_price else None,
+            "normalized_currency": self.normalized_currency,
+            "exchange_rate": self.exchange_rate,
             "price_text": self.price_text,
             "in_stock": self.in_stock,
             "stock_quantity": self.stock_quantity,
@@ -175,6 +181,9 @@ class Product(Base):
             "Price": float(self.price) if self.price else "",
             "Original Price": float(self.original_price) if self.original_price else "",
             "Currency": self.currency,
+            "Normalized Price": float(self.normalized_price) if self.normalized_price else "",
+            "Normalized Currency": self.normalized_currency or "",
+            "Exchange Rate": self.exchange_rate or "",
             "In Stock": "Yes" if self.in_stock else "No",
             "Stock Quantity": self.stock_quantity or "",
             "URL": self.url,
