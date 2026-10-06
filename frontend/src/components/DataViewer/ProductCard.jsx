@@ -9,7 +9,7 @@ import {
 import { cn, formatPrice, truncate } from '@/utils/helpers'
 import { Card, Badge } from '@/components/Common'
 
-export function ProductCard({ product, onClick, selected = false, onToggleSelect = null }) {
+export function ProductCard({ product, onClick, selected = false, onToggleSelect = null, onViewCluster = null }) {
   return (
     <Card
       hover
@@ -109,11 +109,26 @@ export function ProductCard({ product, onClick, selected = false, onToggleSelect
                 {product.category_path || product.category}
               </p>
             ) : <span />}
-            {product.variants && product.variants.length > 0 && (
-              <span className="shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-                {product.variants.length} vars
-              </span>
-            )}
+            <div className="flex items-center gap-1.5">
+              {product.variants && product.variants.length > 0 && (
+                <span className="shrink-0 text-[11px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                  {product.variants.length} vars
+                </span>
+              )}
+              {product.match_cluster_id && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (onViewCluster) onViewCluster(product.match_cluster_id)
+                  }}
+                  className="shrink-0 inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 hover:bg-indigo-200 text-indigo-800 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 dark:text-indigo-400 transition-colors"
+                  title="Cross-catalog competitor match"
+                >
+                  ⚡ Competitors
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </Card>
@@ -121,7 +136,7 @@ export function ProductCard({ product, onClick, selected = false, onToggleSelect
 }
 
 // Compact product row for tables
-export function ProductRow({ product, onClick, selected = false, onToggleSelect = null }) {
+export function ProductRow({ product, onClick, selected = false, onToggleSelect = null, onViewCluster = null }) {
   return (
     <tr
       className={cn(
@@ -164,11 +179,26 @@ export function ProductRow({ product, onClick, selected = false, onToggleSelect 
         <p className="font-medium text-gray-900 dark:text-white truncate max-w-xs">
           {product.name}
         </p>
-        {product.sku && (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            SKU: {product.sku}
-          </p>
-        )}
+        <div className="flex items-center gap-2 mt-0.5">
+          {product.sku && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              SKU: {product.sku}
+            </span>
+          )}
+          {product.match_cluster_id && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                if (onViewCluster) onViewCluster(product.match_cluster_id)
+              }}
+              className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.2 rounded-full bg-indigo-100 hover:bg-indigo-200 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-400 transition-colors"
+              title="View cross-store competitor prices"
+            >
+              ⚡ Competitors
+            </button>
+          )}
+        </div>
       </td>
       
       {/* Brand */}

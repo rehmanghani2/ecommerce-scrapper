@@ -105,6 +105,10 @@ class Product(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     raw_data = Column(JSON, default=dict)  # Original raw scraped data
     
+    # Cross-Store Competitor Product Matching
+    match_cluster_id = Column(String(100), index=True, nullable=True)  # Cluster group ID connecting identical competitor products
+    match_confidence = Column(Float, nullable=True)  # Similarity confidence score (0.0 - 1.0)
+    
     # Job relationship
     job_id = Column(Integer, ForeignKey("jobs.id", ondelete="CASCADE"), index=True)
     job = relationship("Job", back_populates="products")
@@ -165,6 +169,8 @@ class Product(Base):
             "rating": self.rating,
             "review_count": self.review_count,
             "source_domain": self.source_domain,
+            "match_cluster_id": self.match_cluster_id,
+            "match_confidence": self.match_confidence,
             "scraped_at": self.scraped_at.isoformat() if self.scraped_at else None,
             "images": [img.to_dict() for img in self.images] if self.images else [],
             "variants": [var.to_dict() for var in self.variants] if self.variants else [],
@@ -199,6 +205,8 @@ class Product(Base):
             "Rating": self.rating,
             "Review Count": self.review_count,
             "Source": self.source_domain,
+            "Match Cluster ID": self.match_cluster_id or "",
+            "Match Confidence": self.match_confidence or "",
             "Scraped At": self.scraped_at.isoformat() if self.scraped_at else "",
         }
 

@@ -748,6 +748,8 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                                 p = Product(
                                     job_id=job_id,
                                     name=data.get("name", "Unknown")[:500],
+                                    sku=data.get("sku"),
+                                    brand=data.get("brand"),
                                     url=p_url or f"{url}#{saved}",
                                     price=p_price,
                                     previous_price=None,
@@ -804,6 +806,18 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
 
                                 save_db.add(p)
                                 await save_db.flush()
+
+                                # Cross-store competitor product matching & deduplication clustering
+                                try:
+                                    from app.services.product_matching_service import product_matching_service
+                                    await product_matching_service.find_or_assign_cluster_for_product(
+                                        db=save_db,
+                                        product=p,
+                                        threshold=0.75,
+                                        allow_ai=False
+                                    )
+                                except Exception as match_err:
+                                    logger.debug(f"Product matching clustering error: {match_err}")
 
                                 if p_price is not None:
                                     ph = PriceHistory(
@@ -1099,6 +1113,8 @@ async def run_bulk_scraper_job(
                                 p = Product(
                                     job_id=job_id,
                                     name=data.get("name", "Product")[:500],
+                                    sku=data.get("sku"),
+                                    brand=data.get("brand"),
                                     price=p_price,
                                     currency=p_curr,
                                     price_text=p_text,
@@ -1110,6 +1126,18 @@ async def run_bulk_scraper_job(
                                 )
                                 save_db.add(p)
                                 await save_db.flush()
+
+                                # Cross-store competitor product matching & deduplication clustering
+                                try:
+                                    from app.services.product_matching_service import product_matching_service
+                                    await product_matching_service.find_or_assign_cluster_for_product(
+                                        db=save_db,
+                                        product=p,
+                                        threshold=0.75,
+                                        allow_ai=False
+                                    )
+                                except Exception as match_err:
+                                    logger.debug(f"Bulk product matching clustering error: {match_err}")
 
                                 if p_price is not None:
                                     ph = PriceHistory(

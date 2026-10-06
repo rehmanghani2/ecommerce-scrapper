@@ -9,6 +9,8 @@ import {
   CloudArrowUpIcon,
   ArrowTrendingDownIcon,
   ChartBarIcon,
+  ArrowsRightLeftIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { cn, formatNumber } from '@/utils/helpers'
 import {
@@ -20,8 +22,9 @@ import {
   Modal,
   ModalFooter,
 } from '@/components/Common'
-import { ProductCard, ProductRow, ProductFilters, ExportButton, PriceHistoryModal, ExportSyncModal } from '@/components/DataViewer'
+import { ProductCard, ProductRow, ProductFilters, ExportButton, PriceHistoryModal, ExportSyncModal, CompetitorClusterModal } from '@/components/DataViewer'
 import { apiGet } from '@/services/api'
+import matchingService from '@/services/matchingService'
 
 export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -30,6 +33,9 @@ export default function Products() {
   const [historyProduct, setHistoryProduct] = useState(null)
   const [selectedProductIds, setSelectedProductIds] = useState([])
   const [isExportSyncModalOpen, setIsExportSyncModalOpen] = useState(false)
+  const [selectedClusterId, setSelectedClusterId] = useState(null)
+  const [isDeduplicating, setIsDeduplicating] = useState(false)
+  const [clusterNotice, setClusterNotice] = useState(null)
 
   // Parse filters from URL
   const filters = {
@@ -51,7 +57,7 @@ export default function Products() {
   )
 
   // Fetch products
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['products', activeFilters, page, pageSize],
     queryFn: () => apiGet('/products', { ...activeFilters, page, page_size: pageSize }),
   })
@@ -99,6 +105,21 @@ export default function Products() {
     }
   }
 
+  const handleRunDeduplication = async () => {
+    if (isDeduplicating) return
+    setIsDeduplicating(true)
+    setClusterNotice(null)
+    try {
+      const res = await matchingService.clusterAll({ threshold: 0.75, use_ai: false })
+      setClusterNotice(res.message || 'Competitor catalog clustering complete!')
+      refetch()
+    } catch (err) {
+      alert('Failed to cluster catalog: ' + (err?.response?.data?.detail || err.message || 'Error'))
+    } finally {
+      setIsDeduplicating(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -113,7 +134,18 @@ export default function Products() {
           </p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Deduplicate & Match Competitors Button */}
+          <Button
+            icon={SparklesIcon}
+            variant="secondary"
+            onClick={handleRunDeduplication}
+            isLoading={isDeduplicating}
+            title="Deduplicate catalog and cluster identical products across competitor stores"
+          >
+            {isDeduplicating ? 'Matching...' : 'Match Competitors'}
+          </Button>
+
           {/* Price Drops Quick Filter */}
           <button
             type="button"
@@ -169,6 +201,23 @@ export default function Products() {
         </div>
       </div>
 
+      {/* Cluster notice banner */}
+      {clusterNotice && (
+        <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-between text-xs text-indigo-900 dark:text-indigo-200">
+          <div className="flex items-center gap-2">
+            <SparklesIcon className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>{clusterNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setClusterNotice(null)}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Filters */}
       <ProductFilters
         filters={filters}
@@ -207,6 +256,7 @@ export default function Products() {
               onClick={() => setSelectedProduct(product)}
               selected={selectedProductIds.includes(product.id)}
               onToggleSelect={handleToggleSelect}
+              onViewCluster={(cid) => setSelectedClusterId(cid)}
             />
           ))}
         </div>
@@ -255,6 +305,7 @@ export default function Products() {
                     onClick={() => setSelectedProduct(product)}
                     selected={selectedProductIds.includes(product.id)}
                     onToggleSelect={handleToggleSelect}
+                    onViewCluster={(cid) => setSelectedClusterId(cid)}
                   />
                 ))}
               </tbody>
@@ -280,6 +331,7 @@ export default function Products() {
         isOpen={!!selectedProduct}
         onClose={() => setSelectedProduct(null)}
         onOpenHistory={(p) => setHistoryProduct(p)}
+        onOpenCluster={(cid) => setSelectedClusterId(cid)}
         onOpenSync={(p) => {
           setSelectedProductIds([p.id])
           setIsExportSyncModalOpen(true)
@@ -293,6 +345,14 @@ export default function Products() {
         onClose={() => setHistoryProduct(null)}
       />
 
+      {/* Cross-Store Competitor Comparison Modal */}
+      <CompetitorClusterModal
+        clusterId={selectedClusterId}
+        isOpen={!!selectedClusterId}
+        onClose={() => setSelectedClusterId(null)}
+        onClusterUpdated={() => refetch()}
+      />
+
       {/* 1-Click Export & Sync Modal */}
       <ExportSyncModal
         isOpen={isExportSyncModalOpen}
@@ -304,7 +364,7 @@ export default function Products() {
   )
 }
 
-function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenSync }) {
+function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSync }) {
   if (!product) return null
 
   return (
@@ -456,6 +516,18 @@ function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenSyn
         <Button variant="secondary" onClick={onClose}>
           Close
         </Button>
+        {product.match_cluster_id && onOpenCluster && (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              onClose()
+              onOpenCluster(product.match_cluster_id)
+            }}
+          >
+            <ArrowsRightLeftIcon className="w-4 h-4 mr-1.5 text-indigo-600" />
+            Competitor Prices
+          </Button>
+        )}
         <Button
           variant="secondary"
           onClick={() => {
