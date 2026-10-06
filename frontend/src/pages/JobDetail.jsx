@@ -24,7 +24,7 @@ import {
   Alert,
   UnderlineTabs,
 } from '@/components/Common'
-import { JobProgress, JobLogs, JobActions } from '@/components/Jobs'
+import { JobProgress, JobLogs, JobActions, CatalogDiffViewer } from '@/components/Jobs'
 import { ProductCard, ExportButton, ExportSyncModal } from '@/components/DataViewer'
 
 export default function JobDetail() {
@@ -169,6 +169,11 @@ export default function JobDetail() {
       label: 'Products',
       count: displayProductsCount,
       content: <JobProducts jobId={job.job_id} onTotalFetched={setProductsCount} />,
+    },
+    {
+      key: 'diff',
+      label: 'Catalog Diff',
+      content: <CatalogDiffViewer jobId={job.id} />,
     },
     {
       key: 'logs',
