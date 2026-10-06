@@ -705,6 +705,18 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                                                 )
                                             except Exception as alert_err:
                                                 logger.error(f"Error triggering price drop alert: {alert_err}")
+
+                                        # Trigger automated competitor repricing (Shopify / WooCommerce / Webhook)
+                                        try:
+                                            from app.services.repricing_service import repricing_service
+                                            await repricing_service.evaluate_and_reprice_product(
+                                                db=save_db,
+                                                product=existing_p,
+                                                competitor_price=p_price,
+                                                competitor_domain=domain,
+                                            )
+                                        except Exception as reprice_err:
+                                            logger.debug(f"Repricing rule evaluation error: {reprice_err}")
                                     
                                     existing_p.price = p_price
                                     existing_p.lowest_price = min(float(existing_p.lowest_price or p_price), p_price)

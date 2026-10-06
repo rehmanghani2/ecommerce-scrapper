@@ -19,6 +19,7 @@ import {
   ServerStackIcon,
   CircleStackIcon,
   CurrencyDollarIcon,
+  ScaleIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/helpers'
@@ -40,6 +41,7 @@ import cloudinaryService from '@/services/cloudinaryService'
 import s3Service from '@/services/s3Service'
 import supabaseService from '@/services/supabaseService'
 import currencyService from '@/services/currencyService'
+import repricingService from '@/services/repricingService'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -100,6 +102,12 @@ export default function Settings() {
       label: 'Multi-Currency Normalization',
       icon: CurrencyDollarIcon,
       content: <CurrencySettings />,
+    },
+    {
+      key: 'repricing',
+      label: 'Automated Repricing',
+      icon: ScaleIcon,
+      content: <RepricingSettings />,
     },
     {
       key: 'appearance',
@@ -2338,6 +2346,531 @@ function CurrencySettings() {
           </div>
         </div>
       </Card>
+    </div>
+  )
+}
+
+function RepricingSettings() {
+  const [rules, setRules] = useState([])
+  const [logs, setLogs] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [activeSubTab, setActiveSubTab] = useState('rules') // 'rules', 'simulate', 'logs'
+
+  // New Rule Form State
+  const [ruleName, setRuleName] = useState('')
+  const [strategy, setStrategy] = useState('beat_by_percentage')
+  const [adjValue, setAdjValue] = useState(2.0)
+  const [floorPrice, setFloorPrice] = useState('')
+  const [ceilingPrice, setCeilingPrice] = useState('')
+  const [platform, setPlatform] = useState('shopify')
+  const [targetDomain, setTargetDomain] = useState('')
+  const [webhookUrl, setWebhookUrl] = useState('')
+
+  // Simulator State
+  const [simPrice, setSimPrice] = useState('100.00')
+  const [simStrategy, setSimStrategy] = useState('beat_by_percentage')
+  const [simAdj, setSimAdj] = useState(2.0)
+  const [simFloor, setSimFloor] = useState('80.00')
+  const [simCeiling, setSimCeiling] = useState('150.00')
+  const [simResult, setSimResult] = useState(null)
+  const [simulating, setSimulating] = useState(false)
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const [fetchedRules, fetchedLogs] = await Promise.all([
+        repricingService.getRules(),
+        repricingService.getLogs(30)
+      ])
+      setRules(fetchedRules || [])
+      setLogs(fetchedLogs || [])
+    } catch (e) {
+      toast.error('Failed to load repricing rules: ' + e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  React.useEffect(() => {
+    loadData()
+  }, [])
+
+  const handleCreateRule = async (e) => {
+    e.preventDefault()
+    if (!ruleName.trim()) {
+      toast.error('Please enter a rule name')
+      return
+    }
+
+    try {
+      await repricingService.createRule({
+        name: ruleName.trim(),
+        strategy,
+        adjustment_value: parseFloat(adjValue) || 2.0,
+        min_floor_price: floorPrice ? parseFloat(floorPrice) : null,
+        max_ceiling_price: ceilingPrice ? parseFloat(ceilingPrice) : null,
+        target_platform: platform,
+        target_domain: targetDomain.trim() || null,
+        webhook_url: webhookUrl.trim() || null,
+        is_active: true,
+      })
+      toast.success('Repricing rule created successfully!')
+      setRuleName('')
+      setFloorPrice('')
+      setCeilingPrice('')
+      setWebhookUrl('')
+      setTargetDomain('')
+      loadData()
+    } catch (err) {
+      toast.error('Failed to save rule: ' + (err.response?.data?.detail || err.message))
+    }
+  }
+
+  const handleDeleteRule = async (id) => {
+    if (!confirm('Are you sure you want to delete this repricing rule?')) return
+    try {
+      await repricingService.deleteRule(id)
+      toast.success('Rule deleted')
+      loadData()
+    } catch (err) {
+      toast.error('Failed to delete rule')
+    }
+  }
+
+  const handleToggleRule = async (rule) => {
+    try {
+      await repricingService.updateRule(rule.id, { is_active: !rule.is_active })
+      toast.success(`Rule ${rule.is_active ? 'paused' : 'activated'}`)
+      loadData()
+    } catch (e) {
+      toast.error('Failed to update rule')
+    }
+  }
+
+  const handleRunSimulation = async () => {
+    setSimulating(true)
+    try {
+      const res = await repricingService.simulate({
+        competitor_price: parseFloat(simPrice),
+        strategy: simStrategy,
+        adjustment_value: parseFloat(simAdj),
+        min_floor_price: simFloor ? parseFloat(simFloor) : null,
+        max_ceiling_price: simCeiling ? parseFloat(simCeiling) : null,
+      })
+      setSimResult(res)
+    } catch (err) {
+      toast.error('Simulation error: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setSimulating(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Overview Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <ScaleIcon className="w-5 h-5 text-indigo-600" />
+              Automated Competitor Repricing Engine
+            </CardTitle>
+            <Badge variant="primary" className="bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300">
+              Auto-Sync Active
+            </Badge>
+          </div>
+        </CardHeader>
+
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Automatically trigger live price updates back to your <strong>Shopify</strong>, <strong>WooCommerce</strong>, or <strong>Custom Webhook</strong> catalog whenever competitor price changes are detected during scrapes (e.g. <em>"Always stay 2% cheaper than Amazon"</em>). Built-in floor limits safeguard your profit margins.
+          </p>
+
+          {/* Sub Navigation */}
+          <div className="flex border-b border-gray-200 dark:border-gray-700 gap-6 text-sm font-medium">
+            <button
+              onClick={() => setActiveSubTab('rules')}
+              className={cn(
+                "pb-3 border-b-2 transition-colors",
+                activeSubTab === 'rules'
+                  ? "border-primary-600 text-primary-600 dark:text-primary-400"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              )}
+            >
+              Active Repricing Rules ({rules.length})
+            </button>
+            <button
+              onClick={() => setActiveSubTab('simulate')}
+              className={cn(
+                "pb-3 border-b-2 transition-colors",
+                activeSubTab === 'simulate'
+                  ? "border-primary-600 text-primary-600 dark:text-primary-400"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              )}
+            >
+              Repricing Simulator & Sandbox
+            </button>
+            <button
+              onClick={() => setActiveSubTab('logs')}
+              className={cn(
+                "pb-3 border-b-2 transition-colors",
+                activeSubTab === 'logs'
+                  ? "border-primary-600 text-primary-600 dark:text-primary-400"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              )}
+            >
+              Execution Audit Logs ({logs.length})
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Tab 1: Rules List & Creation Form */}
+      {activeSubTab === 'rules' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Create Rule Form */}
+          <Card className="lg:col-span-1">
+            <CardHeader>
+              <CardTitle className="text-base">Create Repricing Rule</CardTitle>
+            </CardHeader>
+            <form onSubmit={handleCreateRule} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-medium text-gray-700 dark:text-gray-300 mb-1">Rule Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Beat Amazon by 2%"
+                  value={ruleName}
+                  onChange={(e) => setRuleName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium text-gray-700 dark:text-gray-300 mb-1">Repricing Strategy</label>
+                <select
+                  value={strategy}
+                  onChange={(e) => setStrategy(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                >
+                  <option value="beat_by_percentage">Beat Competitor by Percentage (%)</option>
+                  <option value="beat_by_fixed">Beat Competitor by Fixed Amount ($)</option>
+                  <option value="match_price">Match Competitor Price Exactly</option>
+                  <option value="markup_percentage">Markup Above Competitor (%)</option>
+                </select>
+              </div>
+
+              {strategy !== 'match_price' && (
+                <div>
+                  <label className="block font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Adjustment Value {strategy.includes('percentage') ? '(%)' : '($)'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={adjValue}
+                    onChange={(e) => setAdjValue(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  />
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block font-medium text-gray-700 dark:text-gray-300 mb-1">Min Floor ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 15.00"
+                    value={floorPrice}
+                    onChange={(e) => setFloorPrice(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-gray-700 dark:text-gray-300 mb-1">Max Ceiling ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g. 250.00"
+                    value={ceilingPrice}
+                    onChange={(e) => setCeilingPrice(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-gray-700 dark:text-gray-300 mb-1">Target Action</label>
+                <select
+                  value={platform}
+                  onChange={(e) => setPlatform(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                >
+                  <option value="shopify">Shopify Catalog (Update by SKU)</option>
+                  <option value="woocommerce">WooCommerce Catalog (Update by SKU)</option>
+                  <option value="custom_webhook">Custom Webhook Endpoint (POST JSON)</option>
+                </select>
+              </div>
+
+              {platform === 'custom_webhook' && (
+                <div>
+                  <label className="block font-medium text-gray-700 dark:text-gray-300 mb-1">Webhook URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://myserver.com/api/repricer"
+                    value={webhookUrl}
+                    onChange={(e) => setWebhookUrl(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block font-medium text-gray-700 dark:text-gray-300 mb-1">Competitor Domain Filter (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. amazon.com (or empty for all)"
+                  value={targetDomain}
+                  onChange={(e) => setTargetDomain(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <Button type="submit" variant="primary" className="w-full text-xs">
+                Save & Enable Rule
+              </Button>
+            </form>
+          </Card>
+
+          {/* Rules List */}
+          <div className="lg:col-span-2 space-y-3">
+            {rules.length === 0 ? (
+              <Card>
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400 text-sm">
+                  No automated repricing rules configured yet. Create a rule on the left to start auto-repricing against competitors!
+                </div>
+              </Card>
+            ) : (
+              rules.map((r) => (
+                <Card key={r.id} className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-gray-900 dark:text-white text-sm">{r.name}</h4>
+                        <span className={cn(
+                          "px-2 py-0.5 rounded text-[10px] font-medium",
+                          r.is_active
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400"
+                            : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                        )}>
+                          {r.is_active ? 'Active' : 'Paused'}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 uppercase">
+                          {r.target_platform}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-gray-600 dark:text-gray-400">
+                        Strategy: <strong>{r.strategy.replace(/_/g, ' ')}</strong> ({r.adjustment_value}
+                        {r.strategy.includes('percentage') ? '%' : '$'})
+                        {r.target_domain && <span> • Target: <strong>{r.target_domain}</strong></span>}
+                        {r.min_floor_price && <span> • Floor: <strong>${r.min_floor_price}</strong></span>}
+                      </p>
+
+                      <p className="text-[11px] text-gray-400 font-mono">
+                        Total updates triggered: {r.total_repriced || 0}
+                        {r.last_triggered_at && ` • Last active: ${new Date(r.last_triggered_at).toLocaleString()}`}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleToggleRule(r)}
+                      >
+                        {r.is_active ? 'Pause' : 'Resume'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => handleDeleteRule(r.id)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Repricing Simulator */}
+      {activeSubTab === 'simulate' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <SparklesIcon className="w-5 h-5 text-indigo-500" />
+              Repricing Sandbox & Calculation Simulator
+            </CardTitle>
+          </CardHeader>
+
+          <div className="space-y-5 text-xs">
+            <p className="text-gray-500 dark:text-gray-400">
+              Test how your floor guardrails, percentage offsets, and markup strategies behave on arbitrary competitor price points without affecting your store.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+              <div>
+                <label className="block font-medium mb-1">Competitor Price ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={simPrice}
+                  onChange={(e) => setSimPrice(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium mb-1">Strategy</label>
+                <select
+                  value={simStrategy}
+                  onChange={(e) => setSimStrategy(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                >
+                  <option value="beat_by_percentage">Beat by %</option>
+                  <option value="beat_by_fixed">Beat by $</option>
+                  <option value="match_price">Match Price</option>
+                  <option value="markup_percentage">Markup %</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-medium mb-1">Offset Value</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={simAdj}
+                  onChange={(e) => setSimAdj(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium mb-1">Min Floor ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={simFloor}
+                  onChange={(e) => setSimFloor(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block font-medium mb-1">Max Ceiling ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={simCeiling}
+                  onChange={(e) => setSimCeiling(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <Button variant="primary" onClick={handleRunSimulation} disabled={simulating}>
+                {simulating ? 'Calculating...' : 'Run Simulation'}
+              </Button>
+
+              {simResult && (
+                <div className="p-3 px-5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center gap-4">
+                  <div>
+                    <span className="text-gray-500 dark:text-gray-400">Competitor: </span>
+                    <strong className="text-gray-900 dark:text-white">${simResult.competitor_price.toFixed(2)}</strong>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 dark:text-gray-400">Your New Price: </span>
+                    <strong className="text-lg text-indigo-600 dark:text-indigo-400">${simResult.calculated_new_price.toFixed(2)}</strong>
+                  </div>
+                  <Badge variant={simResult.guardrail_status === 'applied' ? 'success' : 'warning'}>
+                    {simResult.guardrail_status}
+                  </Badge>
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Tab 3: Execution Audit Logs */}
+      {activeSubTab === 'logs' && (
+        <Card padding="none">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
+              <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500">
+                <tr>
+                  <th className="px-4 py-3 text-left font-medium">Timestamp</th>
+                  <th className="px-4 py-3 text-left font-medium">Product / SKU</th>
+                  <th className="px-4 py-3 text-left font-medium">Competitor Price</th>
+                  <th className="px-4 py-3 text-left font-medium">Calculated New Price</th>
+                  <th className="px-4 py-3 text-left font-medium">Platform</th>
+                  <th className="px-4 py-3 text-left font-medium">Status</th>
+                  <th className="px-4 py-3 text-left font-medium">Notes / Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {logs.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" className="px-4 py-8 text-center text-gray-500">
+                      No automated repricing operations triggered yet.
+                    </td>
+                  </tr>
+                ) : (
+                  logs.map((l) => (
+                    <tr key={l.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                        {new Date(l.created_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3 font-medium text-gray-900 dark:text-white max-w-xs truncate">
+                        {l.product_name}
+                        {l.product_sku && <span className="block text-[10px] font-mono text-gray-400">SKU: {l.product_sku}</span>}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
+                        {l.currency} {l.competitor_price?.toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-emerald-600 dark:text-emerald-400">
+                        {l.currency} {l.calculated_new_price?.toFixed(2)}
+                      </td>
+                      <td className="px-4 py-3 uppercase font-mono text-indigo-600 dark:text-indigo-400">
+                        {l.target_platform}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={cn(
+                          "px-2 py-0.5 rounded text-[10px] font-medium",
+                          l.status === 'applied'
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400"
+                            : "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400"
+                        )}>
+                          {l.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 max-w-xs truncate">
+                        {l.reason || '—'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   )
 }
