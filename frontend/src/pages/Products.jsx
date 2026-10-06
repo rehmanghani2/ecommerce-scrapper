@@ -11,6 +11,7 @@ import {
   ChartBarIcon,
   ArrowsRightLeftIcon,
   SparklesIcon,
+  ChatBubbleBottomCenterTextIcon,
 } from '@heroicons/react/24/outline'
 import { cn, formatNumber } from '@/utils/helpers'
 import {
@@ -22,7 +23,7 @@ import {
   Modal,
   ModalFooter,
 } from '@/components/Common'
-import { ProductCard, ProductRow, ProductFilters, ExportButton, PriceHistoryModal, ExportSyncModal, CompetitorClusterModal } from '@/components/DataViewer'
+import { ProductCard, ProductRow, ProductFilters, ExportButton, PriceHistoryModal, ExportSyncModal, CompetitorClusterModal, ProductSentimentModal } from '@/components/DataViewer'
 import { apiGet } from '@/services/api'
 import matchingService from '@/services/matchingService'
 
@@ -34,6 +35,7 @@ export default function Products() {
   const [selectedProductIds, setSelectedProductIds] = useState([])
   const [isExportSyncModalOpen, setIsExportSyncModalOpen] = useState(false)
   const [selectedClusterId, setSelectedClusterId] = useState(null)
+  const [sentimentProduct, setSentimentProduct] = useState(null)
   const [isDeduplicating, setIsDeduplicating] = useState(false)
   const [clusterNotice, setClusterNotice] = useState(null)
 
@@ -332,6 +334,7 @@ export default function Products() {
         onClose={() => setSelectedProduct(null)}
         onOpenHistory={(p) => setHistoryProduct(p)}
         onOpenCluster={(cid) => setSelectedClusterId(cid)}
+        onOpenSentiment={(p) => setSentimentProduct(p)}
         onOpenSync={(p) => {
           setSelectedProductIds([p.id])
           setIsExportSyncModalOpen(true)
@@ -353,6 +356,13 @@ export default function Products() {
         onClusterUpdated={() => refetch()}
       />
 
+      {/* Customer Reviews & AI Sentiment Intelligence Modal */}
+      <ProductSentimentModal
+        product={sentimentProduct}
+        isOpen={!!sentimentProduct}
+        onClose={() => setSentimentProduct(null)}
+      />
+
       {/* 1-Click Export & Sync Modal */}
       <ExportSyncModal
         isOpen={isExportSyncModalOpen}
@@ -364,7 +374,7 @@ export default function Products() {
   )
 }
 
-function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSync }) {
+function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSentiment, onOpenSync }) {
   if (!product) return null
 
   return (
@@ -538,6 +548,18 @@ function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenClu
           <ChartBarIcon className="w-4 h-4 mr-1.5 text-primary-600" />
           Price History & Trends
         </Button>
+        {onOpenSentiment && (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              onClose()
+              onOpenSentiment(product)
+            }}
+          >
+            <ChatBubbleBottomCenterTextIcon className="w-4 h-4 mr-1.5 text-indigo-600" />
+            Reviews & Sentiment
+          </Button>
+        )}
         {onOpenSync && (
           <Button
             variant="primary"

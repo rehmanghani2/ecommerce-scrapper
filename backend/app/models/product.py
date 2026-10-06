@@ -117,6 +117,8 @@ class Product(Base):
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
     price_history = relationship("PriceHistory", back_populates="product", cascade="all, delete-orphan", order_by="desc(PriceHistory.recorded_at)")
+    reviews = relationship("ProductReview", back_populates="product", cascade="all, delete-orphan", order_by="desc(ProductReview.created_at)")
+    sentiment_summary = relationship("ProductSentimentSummary", back_populates="product", uselist=False, cascade="all, delete-orphan")
     
     # Indexes
     __table_args__ = (
@@ -305,4 +307,86 @@ class PriceHistory(Base):
             "price_text": self.price_text,
             "currency": self.currency,
             "recorded_at": self.recorded_at.isoformat() if self.recorded_at else None,
+        }
+
+
+class ProductReview(Base):
+    """Model representing an extracted customer review for a product."""
+    __tablename__ = "product_reviews"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), index=True, nullable=False)
+
+    author = Column(String(255), nullable=True)
+    rating = Column(Float, nullable=True)  # e.g. 1.0 to 5.0
+    title = Column(String(500), nullable=True)
+    content = Column(Text, nullable=False)
+    review_date = Column(DateTime(timezone=True), nullable=True)
+    verified_purchase = Column(Boolean, default=False)
+    helpful_votes = Column(Integer, default=0)
+
+    # Sentiment mining attributes
+    sentiment = Column(String(50), default="neutral", index=True)  # positive, neutral, negative
+    sentiment_score = Column(Float, nullable=True)  # -1.0 to +1.0
+    key_topics = Column(JSON, default=list)  # extracted topics e.g. ["battery life", "fit"]
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    product = relationship("Product", back_populates="reviews")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "product_id": self.product_id,
+            "author": self.author,
+            "rating": self.rating,
+            "title": self.title,
+            "content": self.content,
+            "review_date": self.review_date.isoformat() if self.review_date else None,
+            "verified_purchase": self.verified_purchase,
+            "helpful_votes": self.helpful_votes,
+            "sentiment": self.sentiment,
+            "sentiment_score": self.sentiment_score,
+            "key_topics": self.key_topics or [],
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ProductSentimentSummary(Base):
+    """Model representing aggregated AI sentiment intelligence and competitor weakness themes."""
+    __tablename__ = "product_sentiment_summaries"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), unique=True, index=True, nullable=False)
+
+    total_reviews_analyzed = Column(Integer, default=0)
+    average_rating = Column(Float, nullable=True)
+    positive_percentage = Column(Float, default=0.0)
+    neutral_percentage = Column(Float, default=0.0)
+    negative_percentage = Column(Float, default=0.0)
+
+    # Extracted competitive intelligence
+    key_strengths = Column(JSON, default=list)  # e.g. ["Superb sound clarity", "Comfortable memory foam"]
+    key_weaknesses = Column(JSON, default=list)  # e.g. ["Battery degrades after 6 months", "Hinge cracks easily"]
+    buyer_pain_points = Column(JSON, default=list)  # e.g. ["App disconnects frequently", "Case scratches easily"]
+    summary_verdict = Column(Text, nullable=True)  # Executive AI synthesis
+
+    last_analyzed_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    product = relationship("Product", back_populates="sentiment_summary")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "product_id": self.product_id,
+            "total_reviews_analyzed": self.total_reviews_analyzed,
+            "average_rating": self.average_rating,
+            "positive_percentage": self.positive_percentage,
+            "neutral_percentage": self.neutral_percentage,
+            "negative_percentage": self.negative_percentage,
+            "key_strengths": self.key_strengths or [],
+            "key_weaknesses": self.key_weaknesses or [],
+            "buyer_pain_points": self.buyer_pain_points or [],
+            "summary_verdict": self.summary_verdict,
+            "last_analyzed_at": self.last_analyzed_at.isoformat() if self.last_analyzed_at else None,
         }
