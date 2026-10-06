@@ -2,7 +2,11 @@
 
 from .database import Base, get_db, engine, AsyncSessionLocal
 from .job import Job, JobStatus
-from .product import Product, ProductImage, ProductVariant, PriceHistory
+from .product import (
+    Product, ProductImage, ProductVariant, PriceHistory,
+    ProductReview, ProductSentimentSummary,
+    ProductStockHistory, ProductInventoryForecast
+)
 from .schedule import ScheduledJob
 from .integration import IntegrationConfig, SyncLog
 from .alert import AlertConfig, AlertNotificationLog
@@ -22,6 +26,10 @@ __all__ = [
     "ProductImage",
     "ProductVariant",
     "PriceHistory",
+    "ProductReview",
+    "ProductSentimentSummary",
+    "ProductStockHistory",
+    "ProductInventoryForecast",
     "ScheduledJob",
     "IntegrationConfig",
     "SyncLog",

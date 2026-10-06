@@ -119,6 +119,8 @@ class Product(Base):
     price_history = relationship("PriceHistory", back_populates="product", cascade="all, delete-orphan", order_by="desc(PriceHistory.recorded_at)")
     reviews = relationship("ProductReview", back_populates="product", cascade="all, delete-orphan", order_by="desc(ProductReview.created_at)")
     sentiment_summary = relationship("ProductSentimentSummary", back_populates="product", uselist=False, cascade="all, delete-orphan")
+    stock_history = relationship("ProductStockHistory", back_populates="product", cascade="all, delete-orphan", order_by="desc(ProductStockHistory.recorded_at)")
+    inventory_forecast = relationship("ProductInventoryForecast", back_populates="product", uselist=False, cascade="all, delete-orphan")
     
     # Indexes
     __table_args__ = (
@@ -389,4 +391,72 @@ class ProductSentimentSummary(Base):
             "buyer_pain_points": self.buyer_pain_points or [],
             "summary_verdict": self.summary_verdict,
             "last_analyzed_at": self.last_analyzed_at.isoformat() if self.last_analyzed_at else None,
+        }
+
+
+class ProductStockHistory(Base):
+    """Model tracking historical stock quantity levels and depletion/restock events over time."""
+    __tablename__ = "product_stock_history"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), index=True, nullable=False)
+
+    stock_quantity = Column(Integer, nullable=True)
+    in_stock = Column(Boolean, default=True)
+    delta = Column(Integer, default=0)
+    change_type = Column(String(50), default="initial")  # "depletion", "restock", "out_of_stock", "back_in_stock", "initial"
+    recorded_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    product = relationship("Product", back_populates="stock_history")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "product_id": self.product_id,
+            "stock_quantity": self.stock_quantity,
+            "in_stock": self.in_stock,
+            "delta": self.delta,
+            "change_type": self.change_type,
+            "recorded_at": self.recorded_at.isoformat() if self.recorded_at else None,
+        }
+
+
+class ProductInventoryForecast(Base):
+    """Model tracking competitor sales velocity, stockout forecasts, and market opportunity alerts."""
+    __tablename__ = "product_inventory_forecasts"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), unique=True, index=True, nullable=False)
+
+    current_stock = Column(Integer, nullable=True)
+    is_in_stock = Column(Boolean, default=True)
+    sales_velocity_per_day = Column(Float, default=0.0)  # Estimated units depleted / day
+    estimated_daily_revenue = Column(Float, default=0.0)  # Velocity * unit price
+    predicted_stockout_date = Column(DateTime(timezone=True), nullable=True)
+    days_until_stockout = Column(Float, nullable=True)
+    stockout_risk_level = Column(String(50), default="unknown")  # "high", "medium", "low", "out_of_stock", "unknown"
+    total_units_sold = Column(Integer, default=0)
+    total_restocks = Column(Integer, default=0)
+    last_restock_date = Column(DateTime(timezone=True), nullable=True)
+    opportunity_verdict = Column(Text, nullable=True)
+    last_calculated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    product = relationship("Product", back_populates="inventory_forecast")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "product_id": self.product_id,
+            "current_stock": self.current_stock,
+            "is_in_stock": self.is_in_stock,
+            "sales_velocity_per_day": round(self.sales_velocity_per_day, 2) if self.sales_velocity_per_day is not None else 0.0,
+            "estimated_daily_revenue": round(self.estimated_daily_revenue, 2) if self.estimated_daily_revenue is not None else 0.0,
+            "predicted_stockout_date": self.predicted_stockout_date.isoformat() if self.predicted_stockout_date else None,
+            "days_until_stockout": round(self.days_until_stockout, 1) if self.days_until_stockout is not None else None,
+            "stockout_risk_level": self.stockout_risk_level,
+            "total_units_sold": self.total_units_sold or 0,
+            "total_restocks": self.total_restocks or 0,
+            "last_restock_date": self.last_restock_date.isoformat() if self.last_restock_date else None,
+            "opportunity_verdict": self.opportunity_verdict,
+            "last_calculated_at": self.last_calculated_at.isoformat() if self.last_calculated_at else None,
         }

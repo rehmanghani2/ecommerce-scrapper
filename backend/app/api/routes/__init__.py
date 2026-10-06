@@ -19,6 +19,7 @@ from . import (
     diff,
     reviews,
     proxies,
+    inventory,
 )
 
 __all__ = [
@@ -40,4 +41,5 @@ __all__ = [
     "diff",
     "reviews",
     "proxies",
+    "inventory",
 ]
