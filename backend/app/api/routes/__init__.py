@@ -1,2 +1,43 @@
 """API routes package."""
 
+from . import (
+    scraper,
+    jobs,
+    exports,
+    auth,
+    websocket,
+    products,
+    schedules,
+    integrations,
+    alerts,
+    cloudinary,
+    s3,
+    supabase,
+    currency,
+    repricing,
+    matching,
+    diff,
+    reviews,
+    proxies,
+)
+
+__all__ = [
+    "scraper",
+    "jobs",
+    "exports",
+    "auth",
+    "websocket",
+    "products",
+    "schedules",
+    "integrations",
+    "alerts",
+    "cloudinary",
+    "s3",
+    "supabase",
+    "currency",
+    "repricing",
+    "matching",
+    "diff",
+    "reviews",
+    "proxies",
+]

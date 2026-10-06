@@ -138,6 +138,23 @@ class ProxyPoolManager:
                     else:
                         self.add_proxy(srv)
 
+    def add_db_records(self, records: List[Any]):
+        """Load proxies from database ProxyRecord models, skipping banned and inactive ones."""
+        if not records:
+            return
+        for r in records:
+            if not getattr(r, "is_active", True) or getattr(r, "is_banned", False):
+                continue
+            server = getattr(r, "server", "")
+            proto = getattr(r, "protocol", "http")
+            user = getattr(r, "username", None)
+            pwd = getattr(r, "password", None)
+            if user and pwd:
+                url = f"{proto}://{user}:{pwd}@{server}"
+            else:
+                url = f"{proto}://{server}"
+            self.add_proxy(url)
+
     @property
     def total_proxies(self) -> int:
         return len(self.pool)
@@ -311,8 +328,9 @@ def build_proxy_pool(
     explicit_proxies: Optional[Any] = None,
     failover_enabled: bool = True,
     max_retries: int = 3,
+    db_records: Optional[List[Any]] = None,
 ) -> ProxyPoolManager:
-    """Helper factory to build a configured ProxyPoolManager from app settings and overrides."""
+    """Helper factory to build a configured ProxyPoolManager from app settings, DB, and overrides."""
     from app.config import settings
     import os
 
@@ -321,6 +339,10 @@ def build_proxy_pool(
     # 1. Explicit request proxies (highest priority)
     if explicit_proxies:
         manager.load_from_config(explicit_proxies)
+
+    # 2. Database managed proxies
+    if db_records:
+        manager.add_db_records(db_records)
 
     # 2. Config / Environment PROXY_LIST or PROXY_POOL_LIST
     env_pool = getattr(settings, "PROXY_POOL_LIST", None) or os.environ.get("PROXY_POOL_LIST") or getattr(settings, "PROXY_LIST", None)

@@ -9,6 +9,7 @@ from .alert import AlertConfig, AlertNotificationLog
 from .repricing import RepricingRule, RepricingLog
 from .selector_preset import SelectorPreset
 from .user import User
+from .proxy import ProxyRecord
 
 __all__ = [
     "Base",
@@ -30,4 +31,5 @@ __all__ = [
     "RepricingLog",
     "SelectorPreset",
     "User",
+    "ProxyRecord",
 ]

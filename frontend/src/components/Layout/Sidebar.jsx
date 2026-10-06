@@ -7,6 +7,7 @@ import {
   CubeIcon,
   ClockIcon,
   ArrowDownTrayIcon,
+  ServerStackIcon,
   Cog6ToothIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -20,6 +21,7 @@ const navigation = [
   { name: 'Products', href: '/products', icon: CubeIcon },
   { name: 'Schedules', href: '/schedules', icon: ClockIcon },
   { name: 'Exports', href: '/exports', icon: ArrowDownTrayIcon },
+  { name: 'Proxies', href: '/proxies', icon: ServerStackIcon },
 ]
 
 const bottomNavigation = [

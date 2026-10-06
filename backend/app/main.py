@@ -12,7 +12,7 @@ import os
 
 from app.config import settings
 from app.models.database import init_db, close_db
-from app.api.routes import scraper, jobs, exports, auth, websocket, products, schedules, integrations, alerts, cloudinary, s3, supabase, currency, repricing, matching, diff, reviews
+from app.api.routes import scraper, jobs, exports, auth, websocket, products, schedules, integrations, alerts, cloudinary, s3, supabase, currency, repricing, matching, diff, reviews, proxies
 from app.services.scheduler_service import scheduler_service
 
 # Configure logging
@@ -223,6 +223,12 @@ app.include_router(
     reviews.router,
     prefix=f"{settings.API_PREFIX}",
     tags=["Reviews & Sentiment Mining"]
+)
+
+app.include_router(
+    proxies.router,
+    prefix=f"{settings.API_PREFIX}",
+    tags=["Proxy Pool Management"]
 )
 
 # Add WebSocket router (add after other routers)
