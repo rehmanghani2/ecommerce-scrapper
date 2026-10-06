@@ -14,6 +14,7 @@ from .repricing import RepricingRule, RepricingLog
 from .selector_preset import SelectorPreset
 from .user import User
 from .proxy import ProxyRecord
+from .report import ReportSchedule, GeneratedReport
 
 __all__ = [
     "Base",
@@ -40,4 +41,6 @@ __all__ = [
     "SelectorPreset",
     "User",
     "ProxyRecord",
+    "ReportSchedule",
+    "GeneratedReport",
 ]

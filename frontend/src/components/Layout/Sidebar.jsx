@@ -8,6 +8,7 @@ import {
   ClockIcon,
   ArrowDownTrayIcon,
   ServerStackIcon,
+  DocumentChartBarIcon,
   Cog6ToothIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Schedules', href: '/schedules', icon: ClockIcon },
   { name: 'Exports', href: '/exports', icon: ArrowDownTrayIcon },
   { name: 'Proxies', href: '/proxies', icon: ServerStackIcon },
+  { name: 'Reports', href: '/reports', icon: DocumentChartBarIcon },
 ]
 
 const bottomNavigation = [
