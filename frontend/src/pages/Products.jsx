@@ -13,6 +13,7 @@ import {
   SparklesIcon,
   ChatBubbleBottomCenterTextIcon,
   BoltIcon,
+  CalculatorIcon,
 } from '@heroicons/react/24/outline'
 import { cn, formatNumber } from '@/utils/helpers'
 import {
@@ -34,6 +35,7 @@ import {
   CompetitorClusterModal,
   ProductSentimentModal,
   ProductInventoryForecastModal,
+  PricingSimulatorModal,
 } from '@/components/DataViewer'
 import { apiGet } from '@/services/api'
 import matchingService from '@/services/matchingService'
@@ -48,6 +50,7 @@ export default function Products() {
   const [selectedClusterId, setSelectedClusterId] = useState(null)
   const [sentimentProduct, setSentimentProduct] = useState(null)
   const [forecastProduct, setForecastProduct] = useState(null)
+  const [simulatorProduct, setSimulatorProduct] = useState(null)
   const [isDeduplicating, setIsDeduplicating] = useState(false)
   const [clusterNotice, setClusterNotice] = useState(null)
 
@@ -348,6 +351,7 @@ export default function Products() {
         onOpenCluster={(cid) => setSelectedClusterId(cid)}
         onOpenSentiment={(p) => setSentimentProduct(p)}
         onOpenForecast={(p) => setForecastProduct(p)}
+        onOpenSimulator={(p) => setSimulatorProduct(p)}
         onOpenSync={(p) => {
           setSelectedProductIds([p.id])
           setIsExportSyncModalOpen(true)
@@ -383,6 +387,13 @@ export default function Products() {
         onClose={() => setForecastProduct(null)}
       />
 
+      {/* AI Competitor Strategy & Pricing Simulator Modal */}
+      <PricingSimulatorModal
+        product={simulatorProduct}
+        isOpen={!!simulatorProduct}
+        onClose={() => setSimulatorProduct(null)}
+      />
+
       {/* 1-Click Export & Sync Modal */}
       <ExportSyncModal
         isOpen={isExportSyncModalOpen}
@@ -394,7 +405,7 @@ export default function Products() {
   )
 }
 
-function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSentiment, onOpenForecast, onOpenSync }) {
+function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSentiment, onOpenForecast, onOpenSimulator, onOpenSync }) {
   if (!product) return null
 
   return (
@@ -590,6 +601,18 @@ function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenClu
           >
             <BoltIcon className="w-4 h-4 mr-1.5 text-amber-500" />
             Stock Velocity & Forecast
+          </Button>
+        )}
+        {onOpenSimulator && (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              onClose()
+              onOpenSimulator(product)
+            }}
+          >
+            <CalculatorIcon className="w-4 h-4 mr-1.5 text-primary-600" />
+            AI Pricing Simulator
           </Button>
         )}
         {onOpenSync && (

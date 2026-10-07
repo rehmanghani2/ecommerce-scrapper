@@ -21,6 +21,7 @@ from . import (
     proxies,
     inventory,
     reports,
+    simulator,
 )
 
 __all__ = [
@@ -44,4 +45,5 @@ __all__ = [
     "proxies",
     "inventory",
     "reports",
+    "simulator",
 ]
