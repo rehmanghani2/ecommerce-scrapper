@@ -18,6 +18,7 @@ from .report import ReportSchedule, GeneratedReport
 from .simulator import PricingSimulationScenario
 from .promotion import ProductPromotion
 from .serp import SerpKeyword, SerpRankingItem
+from .buybox import ProductBuyBoxState, ProductBuyBoxHistory
 
 __all__ = [
     "Base",
@@ -50,4 +51,6 @@ __all__ = [
     "ProductPromotion",
     "SerpKeyword",
     "SerpRankingItem",
+    "ProductBuyBoxState",
+    "ProductBuyBoxHistory",
 ]

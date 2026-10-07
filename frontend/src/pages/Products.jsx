@@ -16,6 +16,7 @@ import {
   CalculatorIcon,
   TicketIcon,
   MagnifyingGlassIcon,
+  TrophyIcon,
 } from '@heroicons/react/24/outline'
 import { cn, formatNumber } from '@/utils/helpers'
 import {
@@ -40,6 +41,7 @@ import {
   PricingSimulatorModal,
   PromotionsTrackerModal,
   ProductSerpRankingModal,
+  BuyBoxTrackerModal,
 } from '@/components/DataViewer'
 import { apiGet } from '@/services/api'
 import matchingService from '@/services/matchingService'
@@ -57,6 +59,7 @@ export default function Products() {
   const [simulatorProduct, setSimulatorProduct] = useState(null)
   const [promotionsProduct, setPromotionsProduct] = useState(null)
   const [serpProduct, setSerpProduct] = useState(null)
+  const [buyboxProduct, setBuyboxProduct] = useState(null)
   const [isCatalogPromotionsOpen, setIsCatalogPromotionsOpen] = useState(false)
   const [isDeduplicating, setIsDeduplicating] = useState(false)
   const [clusterNotice, setClusterNotice] = useState(null)
@@ -370,6 +373,7 @@ export default function Products() {
         onOpenSimulator={(p) => setSimulatorProduct(p)}
         onOpenPromotions={(p) => setPromotionsProduct(p)}
         onOpenSerp={(p) => setSerpProduct(p)}
+        onOpenBuyBox={(p) => setBuyboxProduct(p)}
         onOpenSync={(p) => {
           setSelectedProductIds([p.id])
           setIsExportSyncModalOpen(true)
@@ -432,6 +436,13 @@ export default function Products() {
         onClose={() => setSerpProduct(null)}
       />
 
+      {/* Marketplace Buy Box Win/Loss Predictor & Tracker Modal */}
+      <BuyBoxTrackerModal
+        product={buyboxProduct}
+        isOpen={!!buyboxProduct}
+        onClose={() => setBuyboxProduct(null)}
+      />
+
       {/* 1-Click Export & Sync Modal */}
       <ExportSyncModal
         isOpen={isExportSyncModalOpen}
@@ -443,7 +454,7 @@ export default function Products() {
   )
 }
 
-function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSentiment, onOpenForecast, onOpenSimulator, onOpenPromotions, onOpenSerp, onOpenSync }) {
+function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSentiment, onOpenForecast, onOpenSimulator, onOpenPromotions, onOpenSerp, onOpenBuyBox, onOpenSync }) {
   if (!product) return null
 
   return (
@@ -675,6 +686,18 @@ function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenClu
           >
             <MagnifyingGlassIcon className="w-4 h-4 mr-1.5 text-indigo-500" />
             SERP Rankings
+          </Button>
+        )}
+        {onOpenBuyBox && (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              onClose()
+              onOpenBuyBox(product)
+            }}
+          >
+            <TrophyIcon className="w-4 h-4 mr-1.5 text-amber-500" />
+            Buy Box Intelligence
           </Button>
         )}
         {onOpenSync && (

@@ -122,6 +122,8 @@ class Product(Base):
     stock_history = relationship("ProductStockHistory", back_populates="product", cascade="all, delete-orphan", order_by="desc(ProductStockHistory.recorded_at)")
     inventory_forecast = relationship("ProductInventoryForecast", back_populates="product", uselist=False, cascade="all, delete-orphan")
     promotions = relationship("ProductPromotion", back_populates="product", cascade="all, delete-orphan", order_by="desc(ProductPromotion.detected_at)")
+    buybox_state = relationship("ProductBuyBoxState", back_populates="product", uselist=False, cascade="all, delete-orphan")
+    buybox_history = relationship("ProductBuyBoxHistory", back_populates="product", cascade="all, delete-orphan", order_by="desc(ProductBuyBoxHistory.recorded_at)")
     
     # Indexes
     __table_args__ = (

@@ -9,3 +9,4 @@ export { default as ProductInventoryForecastModal } from './ProductInventoryFore
 export { default as PricingSimulatorModal } from './PricingSimulatorModal'
 export { default as PromotionsTrackerModal } from './PromotionsTrackerModal'
 export { default as ProductSerpRankingModal } from './ProductSerpRankingModal'
+export { default as BuyBoxTrackerModal } from './BuyBoxTrackerModal'
