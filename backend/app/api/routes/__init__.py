@@ -22,6 +22,7 @@ from . import (
     inventory,
     reports,
     simulator,
+    promotions,
 )
 
 __all__ = [
@@ -46,4 +47,5 @@ __all__ = [
     "inventory",
     "reports",
     "simulator",
+    "promotions",
 ]

@@ -14,6 +14,7 @@ import {
   ChatBubbleBottomCenterTextIcon,
   BoltIcon,
   CalculatorIcon,
+  TicketIcon,
 } from '@heroicons/react/24/outline'
 import { cn, formatNumber } from '@/utils/helpers'
 import {
@@ -36,6 +37,7 @@ import {
   ProductSentimentModal,
   ProductInventoryForecastModal,
   PricingSimulatorModal,
+  PromotionsTrackerModal,
 } from '@/components/DataViewer'
 import { apiGet } from '@/services/api'
 import matchingService from '@/services/matchingService'
@@ -51,6 +53,8 @@ export default function Products() {
   const [sentimentProduct, setSentimentProduct] = useState(null)
   const [forecastProduct, setForecastProduct] = useState(null)
   const [simulatorProduct, setSimulatorProduct] = useState(null)
+  const [promotionsProduct, setPromotionsProduct] = useState(null)
+  const [isCatalogPromotionsOpen, setIsCatalogPromotionsOpen] = useState(false)
   const [isDeduplicating, setIsDeduplicating] = useState(false)
   const [clusterNotice, setClusterNotice] = useState(null)
 
@@ -178,6 +182,15 @@ export default function Products() {
           >
             <ArrowTrendingDownIcon className="w-4 h-4 text-emerald-500" />
             Price Drops Only
+          </button>
+
+          {/* Competitor Promotions & Coupons Explorer */}
+          <button
+            onClick={() => setIsCatalogPromotionsOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-emerald-500/50 transition-all"
+          >
+            <TicketIcon className="w-4 h-4 text-emerald-500" />
+            Coupons & Promos
           </button>
 
           {/* View toggle */}
@@ -352,6 +365,7 @@ export default function Products() {
         onOpenSentiment={(p) => setSentimentProduct(p)}
         onOpenForecast={(p) => setForecastProduct(p)}
         onOpenSimulator={(p) => setSimulatorProduct(p)}
+        onOpenPromotions={(p) => setPromotionsProduct(p)}
         onOpenSync={(p) => {
           setSelectedProductIds([p.id])
           setIsExportSyncModalOpen(true)
@@ -394,6 +408,19 @@ export default function Products() {
         onClose={() => setSimulatorProduct(null)}
       />
 
+      {/* Competitor Promotions & Coupon Intelligence Modals */}
+      <PromotionsTrackerModal
+        product={promotionsProduct}
+        isOpen={!!promotionsProduct}
+        onClose={() => setPromotionsProduct(null)}
+      />
+
+      <PromotionsTrackerModal
+        product={null}
+        isOpen={isCatalogPromotionsOpen}
+        onClose={() => setIsCatalogPromotionsOpen(false)}
+      />
+
       {/* 1-Click Export & Sync Modal */}
       <ExportSyncModal
         isOpen={isExportSyncModalOpen}
@@ -405,7 +432,7 @@ export default function Products() {
   )
 }
 
-function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSentiment, onOpenForecast, onOpenSimulator, onOpenSync }) {
+function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSentiment, onOpenForecast, onOpenSimulator, onOpenPromotions, onOpenSync }) {
   if (!product) return null
 
   return (
@@ -613,6 +640,18 @@ function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenClu
           >
             <CalculatorIcon className="w-4 h-4 mr-1.5 text-primary-600" />
             AI Pricing Simulator
+          </Button>
+        )}
+        {onOpenPromotions && (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              onClose()
+              onOpenPromotions(product)
+            }}
+          >
+            <TicketIcon className="w-4 h-4 mr-1.5 text-emerald-500" />
+            Coupons & Promos
           </Button>
         )}
         {onOpenSync && (

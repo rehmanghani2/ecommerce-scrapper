@@ -16,6 +16,7 @@ from .user import User
 from .proxy import ProxyRecord
 from .report import ReportSchedule, GeneratedReport
 from .simulator import PricingSimulationScenario
+from .promotion import ProductPromotion
 
 __all__ = [
     "Base",
@@ -45,4 +46,5 @@ __all__ = [
     "ReportSchedule",
     "GeneratedReport",
     "PricingSimulationScenario",
+    "ProductPromotion",
 ]

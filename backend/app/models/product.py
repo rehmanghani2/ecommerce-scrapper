@@ -121,6 +121,7 @@ class Product(Base):
     sentiment_summary = relationship("ProductSentimentSummary", back_populates="product", uselist=False, cascade="all, delete-orphan")
     stock_history = relationship("ProductStockHistory", back_populates="product", cascade="all, delete-orphan", order_by="desc(ProductStockHistory.recorded_at)")
     inventory_forecast = relationship("ProductInventoryForecast", back_populates="product", uselist=False, cascade="all, delete-orphan")
+    promotions = relationship("ProductPromotion", back_populates="product", cascade="all, delete-orphan", order_by="desc(ProductPromotion.detected_at)")
     
     # Indexes
     __table_args__ = (
@@ -179,6 +180,7 @@ class Product(Base):
             "images": [img.to_dict() for img in self.images] if self.images else [],
             "variants": [var.to_dict() for var in self.variants] if self.variants else [],
             "price_history": [ph.to_dict() for ph in self.price_history] if self.price_history else [],
+            "promotions": [promo.to_dict() for promo in self.promotions] if getattr(self, "promotions", None) else [],
         }
     
     def to_export_dict(self) -> Dict[str, Any]:
