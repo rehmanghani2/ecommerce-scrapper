@@ -19,6 +19,7 @@ from .simulator import PricingSimulationScenario
 from .promotion import ProductPromotion
 from .serp import SerpKeyword, SerpRankingItem
 from .buybox import ProductBuyBoxState, ProductBuyBoxHistory
+from .throttle import DomainThrottlePolicy
 
 __all__ = [
     "Base",
@@ -53,4 +54,5 @@ __all__ = [
     "SerpRankingItem",
     "ProductBuyBoxState",
     "ProductBuyBoxHistory",
+    "DomainThrottlePolicy",
 ]

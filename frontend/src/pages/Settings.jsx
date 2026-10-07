@@ -20,6 +20,7 @@ import {
   CircleStackIcon,
   CurrencyDollarIcon,
   ScaleIcon,
+  AdjustmentsHorizontalIcon,
 } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/helpers'
@@ -42,6 +43,7 @@ import s3Service from '@/services/s3Service'
 import supabaseService from '@/services/supabaseService'
 import currencyService from '@/services/currencyService'
 import repricingService from '@/services/repricingService'
+import DomainThrottlingSettings from '@/components/Settings/DomainThrottlingSettings'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -108,6 +110,12 @@ export default function Settings() {
       label: 'Automated Repricing',
       icon: ScaleIcon,
       content: <RepricingSettings />,
+    },
+    {
+      key: 'throttling',
+      label: 'Rate Limiting & Auto-Throttling',
+      icon: AdjustmentsHorizontalIcon,
+      content: <DomainThrottlingSettings />,
     },
     {
       key: 'appearance',

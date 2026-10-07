@@ -344,6 +344,15 @@ class HttpxScraper:
 
             await self._log(f"[{pages_scraped + 1}/{self.max_pages}] Fetching: {url}")
 
+            # Acquire domain rate-limiter tokens and adaptive backoff
+            from app.core.rate_limiter import rate_limiter
+            acq_info = await rate_limiter.acquire(url)
+            if acq_info.get("delay_applied", 0) > 2.0 and acq_info.get("status") in ("throttled", "degraded", "cooldown"):
+                await self._log(
+                    f"  ↳ Rate-Limiter Auto-Throttling: adaptive delay {acq_info['delay_applied']:.1f}s enforced for {acq_info['domain']}",
+                    "warning"
+                )
+
             # Fetch with proxy rotation & automated failover on 403 / 429
             response = None
             max_retries = self.proxy_pool.max_retries if (self.proxy_pool and self.proxy_pool.failover_enabled) else 1
@@ -366,6 +375,8 @@ class HttpxScraper:
                         response = await client.get(url)
 
                     status = response.status_code
+                    retry_header = response.headers.get("Retry-After") if response else None
+                    rate_limiter.report_response(url, status, retry_header)
 
                     # If blocked by anti-bot or rate limited, failover to next proxy
                     if status in (403, 429, 503) and self.proxy_pool and self.proxy_pool.failover_enabled and attempt < max_retries:

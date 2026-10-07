@@ -163,6 +163,10 @@ class BulkBatchScraper:
     ):
         """Worker task processing a single URL."""
         async with semaphore:
+            # Enforce domain rate limiting & adaptive backoff
+            from app.core.rate_limiter import rate_limiter
+            await rate_limiter.acquire(url)
+
             selectors = self.custom_selectors or _get_selectors(url)
             html = ""
             status_code = 0
@@ -191,6 +195,9 @@ class BulkBatchScraper:
                     resp = await client.get(url, timeout=25.0)
 
                 status_code = resp.status_code
+                retry_header = resp.headers.get("Retry-After") if resp else None
+                rate_limiter.report_response(url, status_code, retry_header)
+
                 if status_code == 200:
                     html = resp.text
                     success = True
@@ -199,6 +206,7 @@ class BulkBatchScraper:
                 elif status_code in (403, 429) and curr_node and self.proxy_pool:
                     self.proxy_pool.report_failure(curr_node, status_code)
             except Exception as req_err:
+                rate_limiter.report_response(url, 503)
                 if curr_node and self.proxy_pool:
                     self.proxy_pool.report_failure(curr_node, error_msg=str(req_err))
                 logger.debug(f"Request failed for {url}: {req_err}")
