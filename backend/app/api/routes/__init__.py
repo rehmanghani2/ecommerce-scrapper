@@ -23,6 +23,7 @@ from . import (
     reports,
     simulator,
     promotions,
+    serp,
 )
 
 __all__ = [
@@ -48,4 +49,5 @@ __all__ = [
     "reports",
     "simulator",
     "promotions",
+    "serp",
 ]

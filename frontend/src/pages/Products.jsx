@@ -15,6 +15,7 @@ import {
   BoltIcon,
   CalculatorIcon,
   TicketIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
 import { cn, formatNumber } from '@/utils/helpers'
 import {
@@ -38,6 +39,7 @@ import {
   ProductInventoryForecastModal,
   PricingSimulatorModal,
   PromotionsTrackerModal,
+  ProductSerpRankingModal,
 } from '@/components/DataViewer'
 import { apiGet } from '@/services/api'
 import matchingService from '@/services/matchingService'
@@ -54,6 +56,7 @@ export default function Products() {
   const [forecastProduct, setForecastProduct] = useState(null)
   const [simulatorProduct, setSimulatorProduct] = useState(null)
   const [promotionsProduct, setPromotionsProduct] = useState(null)
+  const [serpProduct, setSerpProduct] = useState(null)
   const [isCatalogPromotionsOpen, setIsCatalogPromotionsOpen] = useState(false)
   const [isDeduplicating, setIsDeduplicating] = useState(false)
   const [clusterNotice, setClusterNotice] = useState(null)
@@ -366,6 +369,7 @@ export default function Products() {
         onOpenForecast={(p) => setForecastProduct(p)}
         onOpenSimulator={(p) => setSimulatorProduct(p)}
         onOpenPromotions={(p) => setPromotionsProduct(p)}
+        onOpenSerp={(p) => setSerpProduct(p)}
         onOpenSync={(p) => {
           setSelectedProductIds([p.id])
           setIsExportSyncModalOpen(true)
@@ -421,6 +425,13 @@ export default function Products() {
         onClose={() => setIsCatalogPromotionsOpen(false)}
       />
 
+      {/* Product SERP Ranking Positions Modal */}
+      <ProductSerpRankingModal
+        product={serpProduct}
+        isOpen={!!serpProduct}
+        onClose={() => setSerpProduct(null)}
+      />
+
       {/* 1-Click Export & Sync Modal */}
       <ExportSyncModal
         isOpen={isExportSyncModalOpen}
@@ -432,7 +443,7 @@ export default function Products() {
   )
 }
 
-function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSentiment, onOpenForecast, onOpenSimulator, onOpenPromotions, onOpenSync }) {
+function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSentiment, onOpenForecast, onOpenSimulator, onOpenPromotions, onOpenSerp, onOpenSync }) {
   if (!product) return null
 
   return (
@@ -652,6 +663,18 @@ function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenClu
           >
             <TicketIcon className="w-4 h-4 mr-1.5 text-emerald-500" />
             Coupons & Promos
+          </Button>
+        )}
+        {onOpenSerp && (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              onClose()
+              onOpenSerp(product)
+            }}
+          >
+            <MagnifyingGlassIcon className="w-4 h-4 mr-1.5 text-indigo-500" />
+            SERP Rankings
           </Button>
         )}
         {onOpenSync && (

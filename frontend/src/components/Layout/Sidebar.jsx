@@ -9,6 +9,7 @@ import {
   ArrowDownTrayIcon,
   ServerStackIcon,
   DocumentChartBarIcon,
+  MagnifyingGlassIcon,
   Cog6ToothIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Exports', href: '/exports', icon: ArrowDownTrayIcon },
   { name: 'Proxies', href: '/proxies', icon: ServerStackIcon },
   { name: 'Reports', href: '/reports', icon: DocumentChartBarIcon },
+  { name: 'Search Rankings', href: '/serp', icon: MagnifyingGlassIcon },
 ]
 
 const bottomNavigation = [

@@ -17,6 +17,7 @@ from .proxy import ProxyRecord
 from .report import ReportSchedule, GeneratedReport
 from .simulator import PricingSimulationScenario
 from .promotion import ProductPromotion
+from .serp import SerpKeyword, SerpRankingItem
 
 __all__ = [
     "Base",
@@ -47,4 +48,6 @@ __all__ = [
     "GeneratedReport",
     "PricingSimulationScenario",
     "ProductPromotion",
+    "SerpKeyword",
+    "SerpRankingItem",
 ]

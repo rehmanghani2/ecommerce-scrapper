@@ -15,6 +15,7 @@ const Schedules = lazy(() => import('./pages/Schedules'))
 const Exports = lazy(() => import('./pages/Exports'))
 const Proxies = lazy(() => import('./pages/Proxies'))
 const Reports = lazy(() => import('./pages/Reports'))
+const SerpTracking = lazy(() => import('./pages/SerpTracking'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
@@ -97,6 +98,7 @@ function App() {
           <Route path="exports" element={<Exports />} />
           <Route path="proxies" element={<Proxies />} />
           <Route path="reports" element={<Reports />} />
+          <Route path="serp" element={<SerpTracking />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 

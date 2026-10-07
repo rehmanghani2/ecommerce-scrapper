@@ -12,7 +12,7 @@ import os
 
 from app.config import settings
 from app.models.database import init_db, close_db
-from app.api.routes import scraper, jobs, exports, auth, websocket, products, schedules, integrations, alerts, cloudinary, s3, supabase, currency, repricing, matching, diff, reviews, proxies, inventory, reports, simulator, promotions
+from app.api.routes import scraper, jobs, exports, auth, websocket, products, schedules, integrations, alerts, cloudinary, s3, supabase, currency, repricing, matching, diff, reviews, proxies, inventory, reports, simulator, promotions, serp
 from app.services.scheduler_service import scheduler_service
 
 # Configure logging
@@ -253,6 +253,12 @@ app.include_router(
     promotions.router,
     prefix=f"{settings.API_PREFIX}",
     tags=["Competitor Promotions & Coupon Tracker"]
+)
+
+app.include_router(
+    serp.router,
+    prefix=f"{settings.API_PREFIX}",
+    tags=["Competitor Search Ranking & SERP Visibility"]
 )
 
 # Add WebSocket router (add after other routers)
