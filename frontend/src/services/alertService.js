@@ -1,5 +1,5 @@
 /**
- * Alert Service for Price Drop & Stock Notifications.
+ * Alert Service for Multi-Store Webhook & Slack/Discord Notification Dispatcher.
  * Communicates with backend endpoints to manage Telegram, Slack, Discord, and Webhook alerts.
  */
 
@@ -30,15 +30,25 @@ export const alertService = {
   /**
    * Send a sample test alert to verify credentials
    */
-  async testChannel(channel, credentials) {
-    return await apiPost('/alerts/test', { channel, credentials })
+  async testChannel(channel, credentials, hmac_secret = null) {
+    return await apiPost('/alerts/test', { channel, credentials, hmac_secret })
   },
 
   /**
-   * Retrieve recent triggered alert logs
+   * Simulate outbound webhook payload with HMAC signature
    */
-  async getLogs(limit = 50) {
-    return await apiGet(`/alerts/logs?limit=${limit}`)
+  async simulateWebhook(payload) {
+    return await apiPost('/alerts/simulate-webhook', payload)
+  },
+
+  /**
+   * Retrieve recent triggered alert logs with optional filtering
+   */
+  async getLogs(limit = 50, channel = '', event_type = '') {
+    const params = new URLSearchParams({ limit: String(limit) })
+    if (channel) params.append('channel', channel)
+    if (event_type) params.append('event_type', event_type)
+    return await apiGet(`/alerts/logs?${params.toString()}`)
   },
 }
 

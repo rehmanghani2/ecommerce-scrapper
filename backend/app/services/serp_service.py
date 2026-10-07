@@ -261,6 +261,24 @@ class SerpService:
         kw.last_checked_at = datetime.now(timezone.utc)
         await db.commit()
 
+        # Dispatch SERP shift alerts for significant rank changes
+        for r in new_ranking_records:
+            if r.previous_rank and abs(r.rank_change) >= 3:
+                try:
+                    from app.services.alert_service import alert_service
+                    await alert_service.process_serp_change(
+                        db=db,
+                        product_id=r.product_id,
+                        product_name=r.title,
+                        product_url=r.url or "",
+                        keyword=kw.keyword,
+                        old_rank=r.previous_rank,
+                        new_rank=r.rank_position,
+                        store_domain=kw.domain,
+                    )
+                except Exception as serp_alert_err:
+                    logger.debug(f"SERP shift alert dispatch error: {serp_alert_err}")
+
         # Build output
         serialized = [r.to_dict() for r in new_ranking_records]
         return {

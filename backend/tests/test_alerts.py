@@ -224,3 +224,78 @@ async def test_process_price_change_filtering():
             currency="USD"
         )
         mock_tele.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_webhook_hmac_signature_dispatch():
+    """Verify HMAC-SHA256 signature generation and outbound header injection."""
+    service = AlertService()
+    secret = "my_super_secret_webhook_key_456"
+    sample_data = {
+        "alert_type": "buybox_lost",
+        "product_name": "Logitech MX Master 3S",
+        "store_domain": "amazon.com",
+        "winner_price": 89.99,
+        "target_winning_price": 88.00,
+    }
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        mock_post.return_value = mock_resp
+        ok, msg = await service.send_generic_webhook_alert(
+            webhook_url="https://api.myapp.com/webhooks/pricing",
+            alert_data=sample_data,
+            hmac_secret=secret,
+        )
+        assert ok is True
+        mock_post.assert_called_once()
+        headers = mock_post.call_args[1]["headers"]
+        assert "X-Scraper-Signature" in headers
+        assert headers["X-Scraper-Signature"].startswith("sha256=")
+        assert headers["X-Scraper-Event"] == "buybox_lost"
+
+
+@pytest.mark.asyncio
+async def test_multistore_and_event_subscription_filtering():
+    """Verify event and domain filtering across multi-store configurations."""
+    service = AlertService()
+    cfg_amazon_buybox = AlertConfig(
+        id=1,
+        channel="slack",
+        name="Amazon Buy Box Slack Alerts",
+        credentials=json.dumps({"webhook_url": "https://hooks.slack.com/services/T/B/X"}),
+        is_active=True,
+        events_subscribed=json.dumps(["buybox_lost", "buybox_won"]),
+        store_domains=json.dumps(["amazon.com"]),
+    )
+
+    # 1. Matching event and domain -> eligible
+    assert service._is_config_eligible(cfg_amazon_buybox, "buybox_lost", "amazon.com") is True
+
+    # 2. Matching event but different domain -> NOT eligible
+    assert service._is_config_eligible(cfg_amazon_buybox, "buybox_lost", "walmart.com") is False
+
+    # 3. Same domain but unsubscribed event (price_drop) -> NOT eligible
+    assert service._is_config_eligible(cfg_amazon_buybox, "price_drop", "amazon.com") is False
+
+
+@pytest.mark.asyncio
+async def test_simulate_webhook_route():
+    """Test POST /api/v1/alerts/simulate-webhook."""
+    from httpx import AsyncClient
+    from app.main import app
+
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        res = await ac.post("/api/v1/alerts/simulate-webhook", json={
+            "event_type": "buybox_lost",
+            "hmac_secret": "test_secret_abc",
+            "store_domain": "amazon.com",
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert data["event"] == "buybox_lost"
+        assert "X-Scraper-Signature" in data["headers"]
+        assert data["headers"]["X-Scraper-Signature"].startswith("sha256=")
+

@@ -19,6 +19,11 @@ class AlertConfig(Base):
     min_drop_percentage = Column(Float, default=5.0)  # e.g., trigger alert if price drops >= 5%
     alert_on_out_of_stock = Column(Boolean, default=True)
     alert_on_back_in_stock = Column(Boolean, default=True)
+    events_subscribed = Column(String(500), default='["price_drop"]', nullable=False)  # JSON list of subscribed events
+    store_domains = Column(String(500), default='["*"]', nullable=False)  # JSON list of allowed domains or ["*"]
+    hmac_secret = Column(String(255), nullable=True)  # Secret key for X-Scraper-Signature HMAC-SHA256
+    custom_headers = Column(Text, nullable=True)  # JSON-encoded custom HTTP headers
+    min_rank_shift = Column(Integer, default=3, nullable=False)  # Trigger on SERP drops >= N positions
     credentials = Column(Text, nullable=True)  # JSON-encoded tokens, chat IDs, webhook URLs
     last_triggered_at = Column(DateTime(timezone=True), nullable=True)
     last_tested_at = Column(DateTime(timezone=True), nullable=True)
@@ -37,7 +42,8 @@ class AlertNotificationLog(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
     product_name = Column(String(500), nullable=False)
     product_url = Column(Text, nullable=True)
-    alert_type = Column(String(50), nullable=False, index=True)  # price_drop, out_of_stock, back_in_stock
+    store_domain = Column(String(255), nullable=True, index=True)
+    alert_type = Column(String(50), nullable=False, index=True)  # price_drop, out_of_stock, back_in_stock, buybox_lost, buybox_won, buybox_suppressed, serp_shift
     channel = Column(String(50), nullable=False, index=True)  # telegram, slack, discord, email, webhook
     old_price = Column(Numeric(12, 2), nullable=True)
     new_price = Column(Numeric(12, 2), nullable=True)

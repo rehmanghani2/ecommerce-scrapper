@@ -246,6 +246,27 @@ class BuyBoxService:
         await db.commit()
         await db.refresh(state)
 
+        # Dispatch automated alert if Buy Box ownership transitioned
+        if event_type in ("lost", "won", "suppressed"):
+            try:
+                from app.services.alert_service import alert_service
+                from app.models.product import Product
+                prod = await db.get(Product, product_id)
+                await alert_service.process_buybox_change(
+                    db=db,
+                    product_id=product_id,
+                    product_name=prod.name if prod else f"Product #{product_id}",
+                    product_url=prod.url if prod else "",
+                    event_type=event_type,
+                    current_winner=new_winner,
+                    winner_price=new_price,
+                    target_winning_price=pred.get("target_winning_price", new_price),
+                    store_domain=state.marketplace or (prod.source_domain if prod else None),
+                    currency=prod.currency if prod else "USD",
+                )
+            except Exception as bb_alert_err:
+                logger.debug(f"Buy box alert dispatch error: {bb_alert_err}")
+
         return await self.get_buybox_detail(db, product_id)
 
     async def get_buybox_detail(self, db: AsyncSession, product_id: int) -> Dict[str, Any]:

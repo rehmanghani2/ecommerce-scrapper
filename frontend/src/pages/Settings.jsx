@@ -44,6 +44,7 @@ import supabaseService from '@/services/supabaseService'
 import currencyService from '@/services/currencyService'
 import repricingService from '@/services/repricingService'
 import DomainThrottlingSettings from '@/components/Settings/DomainThrottlingSettings'
+import NotificationDispatchSettings from '@/components/Settings/NotificationDispatchSettings'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -65,9 +66,9 @@ export default function Settings() {
     },
     {
       key: 'notifications',
-      label: 'Notifications',
+      label: 'Notifications & Webhooks',
       icon: BellIcon,
-      content: <NotificationSettings />,
+      content: <NotificationDispatchSettings />,
     },
     {
       key: 'scraping',
