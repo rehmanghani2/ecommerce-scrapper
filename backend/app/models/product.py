@@ -179,11 +179,11 @@ class Product(Base):
             "match_cluster_id": self.match_cluster_id,
             "match_confidence": self.match_confidence,
             "scraped_at": self.scraped_at.isoformat() if self.scraped_at else None,
-            "images": [img.to_dict() for img in self.images] if self.images else [],
-            "variants": [var.to_dict() for var in self.variants] if self.variants else [],
-            "price_history": [ph.to_dict() for ph in self.price_history] if self.price_history else [],
-            "promotions": [promo.to_dict() for promo in self.promotions] if getattr(self, "promotions", None) else [],
-            "taxonomy_mappings": [m.to_dict() for m in self.taxonomy_mappings] if getattr(self, "taxonomy_mappings", None) else [],
+            "images": [img.to_dict() for img in self.images] if "images" in self.__dict__ and self.images else [],
+            "variants": [var.to_dict() for var in self.variants] if "variants" in self.__dict__ and self.variants else [],
+            "price_history": [ph.to_dict() for ph in self.price_history] if "price_history" in self.__dict__ and self.price_history else [],
+            "promotions": [promo.to_dict() for promo in self.promotions] if "promotions" in self.__dict__ and self.promotions else [],
+            "taxonomy_mappings": [m.to_dict() for m in self.taxonomy_mappings] if "taxonomy_mappings" in self.__dict__ and self.taxonomy_mappings else [],
         }
     
     def to_export_dict(self) -> Dict[str, Any]:

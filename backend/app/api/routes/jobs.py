@@ -376,7 +376,11 @@ async def get_job_products(
     offset = (page - 1) * page_size
     products_query = (
         select(Product)
-        .options(selectinload(Product.images), selectinload(Product.variants))
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.variants),
+            selectinload(Product.price_history)
+        )
         .where(Product.job_id == job.id)
         .offset(offset)
         .limit(page_size)
