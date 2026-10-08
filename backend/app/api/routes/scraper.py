@@ -8,7 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List, Dict, Any
 import uuid
 import json
+import logging
 from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
 
 from app.models.database import get_db
 from app.models.job import Job, JobStatus, JobType
