@@ -183,6 +183,7 @@ class Product(Base):
             "variants": [var.to_dict() for var in self.variants] if self.variants else [],
             "price_history": [ph.to_dict() for ph in self.price_history] if self.price_history else [],
             "promotions": [promo.to_dict() for promo in self.promotions] if getattr(self, "promotions", None) else [],
+            "taxonomy_mappings": [m.to_dict() for m in self.taxonomy_mappings] if getattr(self, "taxonomy_mappings", None) else [],
         }
     
     def to_export_dict(self) -> Dict[str, Any]:

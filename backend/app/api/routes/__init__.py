@@ -26,6 +26,7 @@ from . import (
     serp,
     buybox,
     throttling,
+    taxonomy,
 )
 
 __all__ = [
@@ -54,4 +55,5 @@ __all__ = [
     "serp",
     "buybox",
     "throttling",
+    "taxonomy",
 ]

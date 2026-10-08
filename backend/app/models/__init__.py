@@ -20,6 +20,9 @@ from .promotion import ProductPromotion
 from .serp import SerpKeyword, SerpRankingItem
 from .buybox import ProductBuyBoxState, ProductBuyBoxHistory
 from .throttle import DomainThrottlePolicy
+from .taxonomy import (
+    TaxonomyStandard, TaxonomyNode, CategoryMappingRule, ProductTaxonomyMapping
+)
 
 __all__ = [
     "Base",
@@ -55,4 +58,8 @@ __all__ = [
     "ProductBuyBoxState",
     "ProductBuyBoxHistory",
     "DomainThrottlePolicy",
+    "TaxonomyStandard",
+    "TaxonomyNode",
+    "CategoryMappingRule",
+    "ProductTaxonomyMapping",
 ]

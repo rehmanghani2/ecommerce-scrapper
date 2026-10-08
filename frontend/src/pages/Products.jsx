@@ -17,6 +17,7 @@ import {
   TicketIcon,
   MagnifyingGlassIcon,
   TrophyIcon,
+  TagIcon,
 } from '@heroicons/react/24/outline'
 import { cn, formatNumber } from '@/utils/helpers'
 import {
@@ -42,6 +43,7 @@ import {
   PromotionsTrackerModal,
   ProductSerpRankingModal,
   BuyBoxTrackerModal,
+  TaxonomyAutoMapperModal,
 } from '@/components/DataViewer'
 import { apiGet } from '@/services/api'
 import matchingService from '@/services/matchingService'
@@ -61,6 +63,7 @@ export default function Products() {
   const [serpProduct, setSerpProduct] = useState(null)
   const [buyboxProduct, setBuyboxProduct] = useState(null)
   const [isCatalogPromotionsOpen, setIsCatalogPromotionsOpen] = useState(false)
+  const [isTaxonomyModalOpen, setIsTaxonomyModalOpen] = useState(false)
   const [isDeduplicating, setIsDeduplicating] = useState(false)
   const [clusterNotice, setClusterNotice] = useState(null)
 
@@ -197,6 +200,15 @@ export default function Products() {
           >
             <TicketIcon className="w-4 h-4 text-emerald-500" />
             Coupons & Promos
+          </button>
+
+          {/* AI Catalog Categorization & Taxonomy Auto-Mapper */}
+          <button
+            onClick={() => setIsTaxonomyModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-indigo-500/50 transition-all shadow-sm"
+          >
+            <TagIcon className="w-4 h-4 text-indigo-500" />
+            Taxonomy Mapper
           </button>
 
           {/* View toggle */}
@@ -441,6 +453,12 @@ export default function Products() {
         product={buyboxProduct}
         isOpen={!!buyboxProduct}
         onClose={() => setBuyboxProduct(null)}
+      />
+
+      {/* AI Product Catalog Categorization & Taxonomy Auto-Mapper Modal */}
+      <TaxonomyAutoMapperModal
+        isOpen={isTaxonomyModalOpen}
+        onClose={() => setIsTaxonomyModalOpen(false)}
       />
 
       {/* 1-Click Export & Sync Modal */}
