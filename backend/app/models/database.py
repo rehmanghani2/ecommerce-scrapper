@@ -109,10 +109,14 @@ async def get_db_context() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
-    """Initialize database tables."""
+    """Initialize database tables and apply schema migrations."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created successfully")
+
+    # Run auto-migrations for missing columns on preexisting tables
+    from .migrations import run_auto_migrations
+    await run_auto_migrations(engine)
 
 
 async def close_db():
