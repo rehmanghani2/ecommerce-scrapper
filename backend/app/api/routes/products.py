@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+@router.get("", response_model=ProductListResponse)
 @router.get("/", response_model=ProductListResponse)
 async def list_products(
     page: int = Query(1, ge=1),

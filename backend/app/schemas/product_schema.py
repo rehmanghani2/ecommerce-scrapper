@@ -116,10 +116,15 @@ class ProductResponse(BaseModel):
     manufacturer: Optional[str]
     specifications: Optional[Dict[str, Any]]
     features: Optional[List[str]]
-    rating: Optional[float]
-    review_count: Optional[int]
-    source_domain: str
-    scraped_at: datetime
+    rating: Optional[float] = None
+    review_count: Optional[int] = 0
+    source_domain: Optional[str] = None
+    scraped_at: Optional[datetime] = None
+    match_cluster_id: Optional[str] = None
+    match_confidence: Optional[float] = None
+    cloudinary_url: Optional[str] = None
+    s3_url: Optional[str] = None
+    supabase_url: Optional[str] = None
     images: List[ProductImageSchema] = []
     variants: List[ProductVariantSchema] = []
     price_history: List[PriceHistorySchema] = []
