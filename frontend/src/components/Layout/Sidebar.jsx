@@ -51,7 +51,7 @@ export function Sidebar({ collapsed, onToggle }) {
 
   const bottomItems = [
     ...(user?.is_superuser
-      ? [{ name: 'Admin Console', href: '/settings?tab=admin', icon: ShieldCheckIcon, badge: 'Root' }]
+      ? [{ name: 'Admin Portal', href: '/admin/dashboard', icon: ShieldCheckIcon, badge: 'Root' }]
       : []),
     { name: 'Settings & Sync', href: '/settings', icon: Cog6ToothIcon },
   ]

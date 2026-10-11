@@ -7,16 +7,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete, or_
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, EmailStr
-from datetime import datetime
+from datetime import datetime, timedelta
 import secrets
 
 from app.models.database import get_db
 from app.models.user import User
 from app.models.job import Job
 from app.models.product import Product
-from app.api.routes.auth import get_current_user
+from app.api.routes.auth import get_current_user, create_access_token
+from app.config import settings
 
 router = APIRouter()
+
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
 
 
 class AdminUserUpdate(BaseModel):
@@ -54,6 +60,8 @@ class UserJobItem(BaseModel):
     scraped_pages: int
     total_pages: int
     progress: float
+    user_id: Optional[int] = None
+    username: Optional[str] = None
     created_at: Optional[datetime]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
@@ -95,9 +103,64 @@ async def require_superuser(current_user: User = Depends(get_current_user)) -> U
     if not current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required"
+            detail="Admin privileges required. Access denied."
         )
     return current_user
+
+
+@router.post("/login")
+async def admin_login(
+    payload: AdminLoginRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Dedicated Admin Login endpoint.
+    Strictly verifies user credentials AND requires is_superuser == True.
+    Non-superusers receive 403 Forbidden.
+    """
+    query = select(User).where((User.username == payload.username) | (User.email == payload.username))
+    result = await db.execute(query)
+    user = result.scalar_one_or_none()
+
+    if not user or not user.verify_password(payload.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect administrator username or password"
+        )
+
+    if not user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. This account does not have administrator privileges."
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator account is currently suspended."
+        )
+
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username},
+        expires_delta=access_token_expires
+    )
+
+    user.last_login = datetime.utcnow()
+    await db.commit()
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name,
+            "is_superuser": True,
+            "is_active": True
+        }
+    }
 
 
 @router.get("/overview", response_model=SystemOverview)
@@ -203,6 +266,8 @@ async def get_user_full_details(
                 scraped_pages=j.scraped_pages or 0,
                 total_pages=j.total_pages or 0,
                 progress=float(j.progress or 0.0),
+                user_id=user.id,
+                username=user.username,
                 created_at=j.created_at,
                 started_at=j.started_at,
                 completed_at=j.completed_at,
@@ -234,6 +299,126 @@ async def get_user_full_details(
         },
         jobs=job_items,
     )
+
+
+@router.get("/jobs", response_model=Dict[str, Any])
+async def list_all_platform_jobs(
+    status_filter: Optional[str] = None,
+    user_id_filter: Optional[int] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+    admin: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db)
+):
+    """List all jobs across all users on the platform with search & filters."""
+    query = select(Job).order_by(Job.id.desc())
+
+    if status_filter and status_filter.lower() != 'all':
+        query = query.where(Job.status == status_filter.lower())
+
+    if user_id_filter is not None:
+        if user_id_filter == 1:
+            query = query.where(or_(Job.user_id == 1, Job.user_id.is_(None)))
+        else:
+            query = query.where(Job.user_id == user_id_filter)
+
+    if search:
+        search_fmt = f"%{search.strip()}%"
+        query = query.where(or_(Job.job_id.ilike(search_fmt), Job.name.ilike(search_fmt), Job.domain.ilike(search_fmt)))
+
+    # Count total
+    count_query = select(func.count()).select_from(query.subquery())
+    total_count = (await db.execute(count_query)).scalar() or 0
+
+    # Paginate
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    res = await db.execute(query)
+    jobs = res.scalars().all()
+
+    # Get users map
+    user_ids = list(set(j.user_id for j in jobs if j.user_id))
+    users_map = {}
+    if user_ids:
+        u_res = await db.execute(select(User).where(User.id.in_(user_ids)))
+        for u in u_res.scalars().all():
+            users_map[u.id] = u.username
+
+    job_items = []
+    for j in jobs:
+        dur = None
+        if j.started_at and j.completed_at:
+            dur = (j.completed_at - j.started_at).total_seconds()
+
+        job_items.append(
+            UserJobItem(
+                id=j.id,
+                job_id=j.job_id,
+                name=j.name,
+                url=j.url,
+                domain=j.domain,
+                status=str(j.status.value if hasattr(j.status, 'value') else j.status),
+                job_type=str(j.job_type.value if hasattr(j.job_type, 'value') else j.job_type),
+                total_products=j.total_products or 0,
+                scraped_pages=j.scraped_pages or 0,
+                total_pages=j.total_pages or 0,
+                progress=float(j.progress or 0.0),
+                user_id=j.user_id,
+                username=users_map.get(j.user_id, "demo" if (not j.user_id or j.user_id == 1) else f"user_{j.user_id}"),
+                created_at=j.created_at,
+                started_at=j.started_at,
+                completed_at=j.completed_at,
+                duration=dur,
+                error_message=j.error_message,
+            )
+        )
+
+    return {
+        "total": total_count,
+        "page": page,
+        "page_size": page_size,
+        "pages": max(1, (total_count + page_size - 1) // page_size),
+        "jobs": job_items,
+    }
+
+
+@router.get("/system/telemetry")
+async def get_admin_system_telemetry(
+    admin: User = Depends(require_superuser),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get system telemetry, proxy pool metrics, and infrastructure health."""
+    from app.core.proxy_manager import build_proxy_pool
+    pool = build_proxy_pool()
+    proxy_status = pool.get_status_summary() if hasattr(pool, 'get_status_summary') else {}
+
+    # DB metrics
+    user_count = (await db.execute(select(func.count(User.id)))).scalar() or 0
+    job_count = (await db.execute(select(func.count(Job.id)))).scalar() or 0
+    product_count = (await db.execute(select(func.count(Product.id)))).scalar() or 0
+
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "database": {
+            "connected": True,
+            "engine": "PostgreSQL (Neon) / SQLite Async",
+            "users_count": user_count,
+            "jobs_count": job_count,
+            "products_count": product_count,
+        },
+        "proxy_pool": {
+            "total_proxies": proxy_status.get("total_proxies", 0),
+            "healthy_proxies": proxy_status.get("healthy_proxies", 0),
+            "banned_proxies": proxy_status.get("banned_proxies", 0),
+            "failover_enabled": True,
+        },
+        "environment": {
+            "app_name": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+            "debug": settings.DEBUG,
+        }
+    }
 
 
 @router.post("/users/{user_id}/regenerate-api-key")

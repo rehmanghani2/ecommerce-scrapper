@@ -1,11 +1,13 @@
 import React, { Suspense, lazy } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Link } from 'react-router-dom'
 
 import Layout from './components/Layout/Layout'
+import AdminLayout from './components/Admin/AdminLayout'
 import { useAuth } from './hooks/useAuth'
 import Spinner from './components/Common/Spinner'
+import { ShieldExclamationIcon } from '@heroicons/react/24/outline'
 
-// Lazy load pages
+// Lazy load Client pages
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Scraper = lazy(() => import('./pages/Scraper'))
 const Jobs = lazy(() => import('./pages/Jobs'))
@@ -21,14 +23,21 @@ const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
+// Lazy load Admin pages
+const AdminLogin = lazy(() => import('./pages/Admin/AdminLogin'))
+const AdminDashboard = lazy(() => import('./pages/Admin/AdminDashboard'))
+const AdminUsers = lazy(() => import('./pages/Admin/AdminUsers'))
+const AdminJobs = lazy(() => import('./pages/Admin/AdminJobs'))
+const AdminSystem = lazy(() => import('./pages/Admin/AdminSystem'))
+
 // Loading component
 const PageLoader = () => (
-  <div className="flex items-center justify-center min-h-screen">
+  <div className="flex items-center justify-center min-h-screen bg-slate-950/20">
     <Spinner size="lg" />
   </div>
 )
 
-// Protected route wrapper
+// Protected route wrapper for standard users
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth()
 
@@ -38,6 +47,51 @@ const ProtectedRoute = ({ children }) => {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
+  }
+
+  return children
+}
+
+// Protected route wrapper strictly for superusers/admins
+const AdminProtectedRoute = ({ children }) => {
+  const { user, isAuthenticated, isLoading } = useAuth()
+
+  if (isLoading) {
+    return <PageLoader />
+  }
+
+  // Not logged in -> send to dedicated Admin Login
+  if (!isAuthenticated) {
+    return <Navigate to="/admin/login" replace />
+  }
+
+  // Logged in, but NOT a superuser -> Strict 403 Forbidden Access Denied screen
+  if (!user?.is_superuser) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center text-white">
+        <div className="w-16 h-16 rounded-2xl bg-rose-600/20 border border-rose-600/30 flex items-center justify-center text-rose-500 mb-4 shadow-xl">
+          <ShieldExclamationIcon className="w-8 h-8" />
+        </div>
+        <h1 className="text-2xl font-extrabold text-white">Access Denied: Administrator Only</h1>
+        <p className="text-sm text-slate-400 mt-2 max-w-md">
+          You are authenticated as <strong className="text-white">@{user?.username}</strong>, but this account does not possess root administrator privileges to access the Admin Portal.
+        </p>
+        <div className="mt-6 flex items-center gap-3">
+          <Link
+            to="/"
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors"
+          >
+            Return to Client App
+          </Link>
+          <Link
+            to="/admin/login"
+            className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-md transition-colors"
+          >
+            Login with Admin Account
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return children
@@ -62,7 +116,7 @@ function App() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        {/* Public routes */}
+        {/* ==================== CLIENT AUTH ROUTES ==================== */}
         <Route
           path="/login"
           element={
@@ -80,7 +134,26 @@ function App() {
           }
         />
 
-        {/* Protected routes */}
+        {/* ==================== DEDICATED ADMIN AUTH ==================== */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+
+        {/* ==================== ISOLATED ADMIN PORTAL ==================== */}
+        <Route
+          path="/admin"
+          element={
+            <AdminProtectedRoute>
+              <AdminLayout />
+            </AdminProtectedRoute>
+          }
+        >
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="users" element={<AdminUsers />} />
+          <Route path="jobs" element={<AdminJobs />} />
+          <Route path="system" element={<AdminSystem />} />
+        </Route>
+
+        {/* ==================== CLIENT APPLICATION ==================== */}
         <Route
           path="/"
           element={
