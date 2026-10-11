@@ -13,7 +13,9 @@ import {
   Cog6ToothIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ShieldCheckIcon,
 } from '@heroicons/react/24/outline'
+import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/utils/helpers'
 
 const navigationGroups = [
@@ -43,12 +45,16 @@ const navigationGroups = [
   },
 ]
 
-const bottomNavigation = [
-  { name: 'Settings & Sync', href: '/settings', icon: Cog6ToothIcon },
-]
-
 export function Sidebar({ collapsed, onToggle }) {
   const location = useLocation()
+  const { user } = useAuth()
+
+  const bottomItems = [
+    ...(user?.is_superuser
+      ? [{ name: 'Admin Console', href: '/settings?tab=admin', icon: ShieldCheckIcon, badge: 'Root' }]
+      : []),
+    { name: 'Settings & Sync', href: '/settings', icon: Cog6ToothIcon },
+  ]
 
   const NavItem = ({ item }) => {
     const isActive =
@@ -142,7 +148,7 @@ export function Sidebar({ collapsed, onToggle }) {
 
       {/* Bottom Navigation */}
       <div className="p-3 border-t border-gray-200 dark:border-gray-800 space-y-1">
-        {bottomNavigation.map((item) => (
+        {bottomItems.map((item) => (
           <NavItem key={item.name} item={item} />
         ))}
 

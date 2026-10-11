@@ -45,6 +45,7 @@ import currencyService from '@/services/currencyService'
 import repricingService from '@/services/repricingService'
 import DomainThrottlingSettings from '@/components/Settings/DomainThrottlingSettings'
 import NotificationDispatchSettings from '@/components/Settings/NotificationDispatchSettings'
+import AdminManagement from '@/components/Settings/AdminManagement'
 import toast from 'react-hot-toast'
 
 export default function Settings() {
@@ -161,6 +162,23 @@ export default function Settings() {
         },
       ],
     },
+    ...(user?.is_superuser
+      ? [
+          {
+            title: 'Admin Access & Control',
+            items: [
+              {
+                key: 'admin',
+                label: 'Root Admin Console',
+                desc: 'User permissions, role delegation & system telemetry',
+                icon: ShieldCheckIcon,
+                badge: 'Root',
+                content: <AdminManagement currentUser={user} />,
+              },
+            ],
+          },
+        ]
+      : []),
   ]
 
   const allItems = categories.flatMap((c) => c.items)

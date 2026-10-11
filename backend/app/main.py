@@ -16,7 +16,7 @@ from app.api.routes import (
     scraper, jobs, exports, auth, websocket, products, schedules,
     integrations, alerts, cloudinary, s3, supabase, currency, repricing,
     matching, diff, reviews, proxies, inventory, reports, simulator,
-    promotions, serp, buybox, throttling, taxonomy
+    promotions, serp, buybox, throttling, taxonomy, admin
 )
 from app.services.scheduler_service import scheduler_service
 
@@ -282,6 +282,12 @@ app.include_router(
     taxonomy.router,
     prefix=f"{settings.API_PREFIX}",
     tags=["Catalog Categorization & Taxonomy Auto-Mapper"]
+)
+
+app.include_router(
+    admin.router,
+    prefix=f"{settings.API_PREFIX}/admin",
+    tags=["Admin Management"]
 )
 
 # Add WebSocket router (add after other routers)
