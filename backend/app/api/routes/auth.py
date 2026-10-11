@@ -84,10 +84,31 @@ async def get_current_user(
     query = select(User).where(User.username == token_data.username)
     result = await db.execute(query)
     user = result.scalar_one_or_none()
-    
     if user is None:
         raise credentials_exception
     return user
+
+
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl=f"{settings.API_PREFIX}/auth/token", auto_error=False)
+
+
+async def get_optional_current_user(
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    db: AsyncSession = Depends(get_db)
+) -> Optional[User]:
+    """Get current user if token is present, else None without raising 401."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        username: str = payload.get("sub")
+        if not username:
+            return None
+        query = select(User).where(User.username == username)
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+    except Exception:
+        return None
 
 
 @router.post("/register", response_model=UserResponse)

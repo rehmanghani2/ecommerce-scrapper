@@ -21,6 +21,8 @@ from app.schemas.scraper_schema import (
     DetectedSelectors, ScraperConfig, SelectorConfig
 )
 from app.core.pattern_detector import PatternDetector
+from app.models.user import User
+from app.api.routes.auth import get_optional_current_user
 from app.services.visual_picker_service import visual_picker_service
 from app.services.ai_extractor_service import ai_extractor_service
 
@@ -32,7 +34,8 @@ router = APIRouter()
 async def start_scraping(
     request: ScraperRequest,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     """
     Start a new scraping job.
@@ -57,6 +60,7 @@ async def start_scraping(
             domain=domain,
             job_type=JobType.FULL_SITE,
             status=JobStatus.PENDING,
+            user_id=current_user.id if current_user else 1,
             config=request.config.model_dump() if request.config else {}
         )
         
@@ -541,7 +545,8 @@ async def parse_bulk_file(payload: Dict[str, Any]):
 async def start_bulk_scraping(
     payload: Dict[str, Any],
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user)
 ):
     """
     Start a high-throughput parallel bulk crawl across a list of URLs (from CSV or sitemap).
@@ -574,6 +579,7 @@ async def start_bulk_scraping(
         domain=domain,
         job_type=JobType.PRODUCT_LIST,
         status=JobStatus.PENDING,
+        user_id=current_user.id if current_user else 1,
         total_pages=len(valid_urls),
         config={
             "is_bulk": True,
