@@ -287,11 +287,17 @@ function JobProducts({ jobId, onTotalFetched }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {total} product{total !== 1 ? 's' : ''} extracted
+          Showing <strong className="text-gray-900 dark:text-white">{products.length}</strong> of{' '}
+          <strong className="text-gray-900 dark:text-white">{total}</strong> product{total !== 1 ? 's' : ''} extracted
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link to="/products">
+            <Button variant="secondary" icon={CubeIcon}>
+              Open in Catalog AI
+            </Button>
+          </Link>
           <Button
             icon={CloudArrowUpIcon}
             variant="primary"
@@ -312,41 +318,13 @@ function JobProducts({ jobId, onTotalFetched }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {products.map((product, idx) => (
-          <div
+          <ProductCard
             key={product.id || idx}
-            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow duration-200"
-          >
-            {product.image_url && (
-              <div className="aspect-square bg-gray-50 dark:bg-gray-900 overflow-hidden">
-                <img
-                  src={product.image_url}
-                  alt={product.name}
-                  className="w-full h-full object-contain p-2"
-                  onError={(e) => { e.target.style.display = 'none' }}
-                />
-              </div>
-            )}
-            <div className="p-3 space-y-1">
-              <p className="text-sm font-medium text-gray-900 dark:text-white line-clamp-2 leading-snug">
-                {product.name}
-              </p>
-              {product.price_text && (
-                <p className="text-base font-bold text-primary-600 dark:text-primary-400">
-                  {product.price_text}
-                </p>
-              )}
-              {product.url && (
-                <a
-                  href={product.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-gray-400 hover:text-primary-500 truncate block mt-1"
-                >
-                  View product ↗
-                </a>
-              )}
-            </div>
-          </div>
+            product={product}
+            onClick={() => {
+              if (product.url) window.open(product.url, '_blank', 'noopener,noreferrer')
+            }}
+          />
         ))}
       </div>
 

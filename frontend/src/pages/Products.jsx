@@ -5,7 +5,6 @@ import {
   CubeIcon,
   Squares2X2Icon,
   TableCellsIcon,
-  ArrowDownTrayIcon,
   CloudArrowUpIcon,
   ArrowTrendingDownIcon,
   ChartBarIcon,
@@ -18,8 +17,9 @@ import {
   MagnifyingGlassIcon,
   TrophyIcon,
   TagIcon,
+  ArrowTopRightOnSquareIcon,
 } from '@heroicons/react/24/outline'
-import { cn, formatNumber } from '@/utils/helpers'
+import { cn, formatNumber, formatPrice } from '@/utils/helpers'
 import {
   Button,
   Card,
@@ -33,7 +33,6 @@ import {
   ProductCard,
   ProductRow,
   ProductFilters,
-  ExportButton,
   PriceHistoryModal,
   ExportSyncModal,
   CompetitorClusterModal,
@@ -87,7 +86,7 @@ export default function Products() {
   )
 
   // Fetch products
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: ['products', activeFilters, page, pageSize],
     queryFn: () => apiGet('/products', { ...activeFilters, page, page_size: pageSize }),
   })
@@ -153,72 +152,27 @@ export default function Products() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
             <CubeIcon className="w-8 h-8 text-primary-600" />
-            Products
+            Product Catalog & Intelligence
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            {formatNumber(totalProducts)} products scraped
+          <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
+            {formatNumber(totalProducts)} products scraped • Click any card or use quick-action icons for AI pricing, stock forecasts & sentiment
           </p>
         </div>
-        
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Deduplicate & Match Competitors Button */}
-          <Button
-            icon={SparklesIcon}
-            variant="secondary"
-            onClick={handleRunDeduplication}
-            isLoading={isDeduplicating}
-            title="Deduplicate catalog and cluster identical products across competitor stores"
-          >
-            {isDeduplicating ? 'Matching...' : 'Match Competitors'}
-          </Button>
 
-          {/* Price Drops Quick Filter */}
-          <button
-            type="button"
-            onClick={() => handleFilterChange({
-              is_price_drop: filters.is_price_drop === 'true' ? '' : 'true'
-            })}
-            className={cn(
-              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
-              filters.is_price_drop === 'true'
-                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-            )}
-          >
-            <ArrowTrendingDownIcon className="w-4 h-4 text-emerald-500" />
-            Price Drops Only
-          </button>
-
-          {/* Competitor Promotions & Coupons Explorer */}
-          <button
-            onClick={() => setIsCatalogPromotionsOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-emerald-500/50 transition-all"
-          >
-            <TicketIcon className="w-4 h-4 text-emerald-500" />
-            Coupons & Promos
-          </button>
-
-          {/* AI Catalog Categorization & Taxonomy Auto-Mapper */}
-          <button
-            onClick={() => setIsTaxonomyModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-indigo-500/50 transition-all shadow-sm"
-          >
-            <TagIcon className="w-4 h-4 text-indigo-500" />
-            Taxonomy Mapper
-          </button>
-
+        <div className="flex items-center gap-2.5 flex-wrap">
           {/* View toggle */}
-          <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+          <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1 border border-gray-200/60 dark:border-gray-700">
             <button
               onClick={() => setViewMode('grid')}
+              title="Grid View"
               className={cn(
-                'p-2 rounded-md transition-colors',
+                'p-1.5 rounded-md transition-colors',
                 viewMode === 'grid'
-                  ? 'bg-white dark:bg-gray-700 shadow-sm'
+                  ? 'bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-400 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               )}
             >
@@ -226,17 +180,18 @@ export default function Products() {
             </button>
             <button
               onClick={() => setViewMode('table')}
+              title="Table View"
               className={cn(
-                'p-2 rounded-md transition-colors',
+                'p-1.5 rounded-md transition-colors',
                 viewMode === 'table'
-                  ? 'bg-white dark:bg-gray-700 shadow-sm'
+                  ? 'bg-white dark:bg-gray-700 text-primary-600 dark:text-primary-400 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               )}
             >
               <TableCellsIcon className="w-5 h-5" />
             </button>
           </div>
-          
+
           <Button
             icon={CloudArrowUpIcon}
             variant={selectedProductIds.length > 0 ? 'primary' : 'secondary'}
@@ -246,6 +201,73 @@ export default function Products() {
               ? `Export & Sync (${selectedProductIds.length})`
               : 'Export & Sync'}
           </Button>
+        </div>
+      </div>
+
+      {/* Catalog AI & Competitor Action Bar */}
+      <div className="bg-white dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700/80 rounded-xl p-3 shadow-sm flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 px-1">
+          <SparklesIcon className="w-4 h-4 text-primary-500" />
+          <span>Catalog Intelligence Suite</span>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Price Drops Quick Filter */}
+          <button
+            type="button"
+            onClick={() =>
+              handleFilterChange({
+                ...filters,
+                is_price_drop: filters.is_price_drop === 'true' ? '' : 'true',
+              })
+            }
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all',
+              filters.is_price_drop === 'true'
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                : 'bg-gray-50 dark:bg-gray-900/60 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-emerald-500/50'
+            )}
+          >
+            <ArrowTrendingDownIcon
+              className={cn(
+                'w-4 h-4',
+                filters.is_price_drop === 'true' ? 'text-white' : 'text-emerald-500'
+              )}
+            />
+            Price Drops Only
+          </button>
+
+          {/* Deduplicate & Match Competitors Button */}
+          <button
+            type="button"
+            onClick={handleRunDeduplication}
+            disabled={isDeduplicating}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-gray-50 dark:bg-gray-900/60 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-indigo-500/50 transition-all disabled:opacity-50"
+            title="Deduplicate catalog and cluster identical products across competitor stores"
+          >
+            <ArrowsRightLeftIcon className="w-4 h-4 text-indigo-500" />
+            {isDeduplicating ? 'Matching Catalog...' : 'Match Competitors'}
+          </button>
+
+          {/* Competitor Promotions & Coupons Explorer */}
+          <button
+            type="button"
+            onClick={() => setIsCatalogPromotionsOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-gray-50 dark:bg-gray-900/60 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-amber-500/50 transition-all"
+          >
+            <TicketIcon className="w-4 h-4 text-amber-500" />
+            Coupons & Promos
+          </button>
+
+          {/* AI Catalog Categorization & Taxonomy Auto-Mapper */}
+          <button
+            type="button"
+            onClick={() => setIsTaxonomyModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-gray-50 dark:bg-gray-900/60 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-purple-500/50 transition-all"
+          >
+            <TagIcon className="w-4 h-4 text-purple-500" />
+            AI Taxonomy Mapper
+          </button>
         </div>
       </div>
 
@@ -284,8 +306,8 @@ export default function Products() {
           title="No products found"
           description={
             Object.values(filters).some(Boolean)
-              ? "No products match your current filters."
-              : "No products have been scraped yet. Start a scraping job to collect products."
+              ? 'No products match your current filters.'
+              : 'No products have been scraped yet. Start a scraping job to collect products.'
           }
           action={
             Object.values(filters).some(Boolean) && (
@@ -305,6 +327,12 @@ export default function Products() {
               selected={selectedProductIds.includes(product.id)}
               onToggleSelect={handleToggleSelect}
               onViewCluster={(cid) => setSelectedClusterId(cid)}
+              onOpenHistory={(p) => setHistoryProduct(p)}
+              onOpenSimulator={(p) => setSimulatorProduct(p)}
+              onOpenForecast={(p) => setForecastProduct(p)}
+              onOpenSentiment={(p) => setSentimentProduct(p)}
+              onOpenBuyBox={(p) => setBuyboxProduct(p)}
+              onOpenPromotions={(p) => setPromotionsProduct(p)}
             />
           ))}
         </div>
@@ -341,7 +369,7 @@ export default function Products() {
                     Stock
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Link
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -354,6 +382,9 @@ export default function Products() {
                     selected={selectedProductIds.includes(product.id)}
                     onToggleSelect={handleToggleSelect}
                     onViewCluster={(cid) => setSelectedClusterId(cid)}
+                    onOpenHistory={(p) => setHistoryProduct(p)}
+                    onOpenSimulator={(p) => setSimulatorProduct(p)}
+                    onOpenForecast={(p) => setForecastProduct(p)}
                   />
                 ))}
               </tbody>
@@ -472,151 +503,315 @@ export default function Products() {
   )
 }
 
-function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenCluster, onOpenSentiment, onOpenForecast, onOpenSimulator, onOpenPromotions, onOpenSerp, onOpenBuyBox, onOpenSync }) {
+function ProductDetailModal({
+  product,
+  isOpen,
+  onClose,
+  onOpenHistory,
+  onOpenCluster,
+  onOpenSentiment,
+  onOpenForecast,
+  onOpenSimulator,
+  onOpenPromotions,
+  onOpenSerp,
+  onOpenBuyBox,
+  onOpenSync,
+}) {
   if (!product) return null
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={product.name}
-      size="lg"
-    >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Image */}
-        <div className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
-          {product.image_url ? (
-            <img
-              src={product.image_url}
-              alt={product.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <CubeIcon className="w-16 h-16 text-gray-400" />
-            </div>
-          )}
-        </div>
+  const intelligenceTools = [
+    {
+      name: 'Price History & Trends',
+      desc: 'Historical chart, lowest/highest record',
+      icon: ChartBarIcon,
+      color: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50',
+      onClick: () => {
+        onClose()
+        onOpenHistory(product)
+      },
+    },
+    {
+      name: 'AI Pricing Simulator',
+      desc: 'Counterfactual margin & elasticity model',
+      icon: CalculatorIcon,
+      color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50',
+      onClick: () => {
+        onClose()
+        onOpenSimulator(product)
+      },
+    },
+    {
+      name: 'Stock Velocity Forecast',
+      desc: 'Depletion rate & stockout prediction',
+      icon: BoltIcon,
+      color: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50',
+      onClick: () => {
+        onClose()
+        onOpenForecast(product)
+      },
+    },
+    {
+      name: 'Reviews & Sentiment',
+      desc: 'Customer ratings & AI aspect analysis',
+      icon: ChatBubbleBottomCenterTextIcon,
+      color: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50',
+      onClick: () => {
+        onClose()
+        onOpenSentiment(product)
+      },
+    },
+    {
+      name: 'Buy Box Intelligence',
+      desc: 'Marketplace win share & seller price delta',
+      icon: TrophyIcon,
+      color: 'text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950/50',
+      onClick: () => {
+        onClose()
+        onOpenBuyBox(product)
+      },
+    },
+    {
+      name: 'Coupons & Promos',
+      desc: 'Detected voucher codes, BOGO & bundles',
+      icon: TicketIcon,
+      color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50',
+      onClick: () => {
+        onClose()
+        onOpenPromotions(product)
+      },
+    },
+    {
+      name: 'SERP Search Rankings',
+      desc: 'Keyword organic & sponsored position',
+      icon: MagnifyingGlassIcon,
+      color: 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-950/50',
+      onClick: () => {
+        onClose()
+        onOpenSerp(product)
+      },
+    },
+    ...(product.match_cluster_id && onOpenCluster
+      ? [
+          {
+            name: 'Competitor Cluster',
+            desc: 'Cross-store price & stock comparison',
+            icon: ArrowsRightLeftIcon,
+            color: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/50',
+            onClick: () => {
+              onClose()
+              onOpenCluster(product.match_cluster_id)
+            },
+          },
+        ]
+      : []),
+  ]
 
-        {/* Details */}
-        <div className="space-y-4">
-          {product.brand && (
-            <p className="text-sm font-medium text-primary-600 dark:text-primary-400">
-              {product.brand}
-            </p>
-          )}
-          
-          <div>
-            <div className="flex items-baseline gap-2 flex-wrap">
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                {product.currency || '£'} {product.price !== null && product.price !== undefined ? product.price : 'Price not available'}
-              </p>
-              {product.normalized_price && product.normalized_currency && product.normalized_currency !== product.currency && (
-                <span className="text-sm font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
-                  ≈ {product.normalized_currency} {product.normalized_price}
-                </span>
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={product.name} size="xl">
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          {/* Image Column */}
+          <div className="md:col-span-5">
+            <div className="aspect-square bg-gray-100 dark:bg-gray-900 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 flex items-center justify-center">
+              {product.image_url ? (
+                <img
+                  src={product.image_url}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center text-gray-400 gap-2">
+                  <CubeIcon className="w-16 h-16 stroke-1" />
+                  <span className="text-xs">No product image</span>
+                </div>
               )}
             </div>
-            {product.original_price && product.original_price > product.price && (
-              <p className="text-sm text-gray-500 line-through">
-                {product.currency || '£'} {product.original_price}
-              </p>
-            )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className={cn(
-              'px-2 py-1 text-sm font-medium rounded',
-              product.in_stock
-                ? 'bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-400'
-                : 'bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400'
-            )}>
-              {product.in_stock ? 'In Stock' : 'Out of Stock'}
-            </span>
-          </div>
+          {/* Details Column */}
+          <div className="md:col-span-7 space-y-4">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              {product.brand ? (
+                <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary-50 text-primary-700 dark:bg-primary-950/60 dark:text-primary-300">
+                  {product.brand}
+                </span>
+              ) : (
+                <span />
+              )}
 
-          {product.description && (
-            <div>
-              <h4 className="font-medium text-gray-900 dark:text-white mb-1">Description</h4>
-              <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-4">
-                {product.description}
-              </p>
+              <span
+                className={cn(
+                  'px-2.5 py-1 text-xs font-semibold rounded-full',
+                  product.in_stock
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'
+                    : 'bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300'
+                )}
+              >
+                {product.in_stock ? '● In Stock' : '○ Out of Stock'}
+              </span>
             </div>
-          )}
 
-          {product.category && (
-            <div>
-              <h4 className="font-medium text-gray-900 dark:text-white mb-1">Category</h4>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {product.category_path || product.category}
-              </p>
-            </div>
-          )}
-
-          {product.sku && (
-            <div>
-              <h4 className="font-medium text-gray-900 dark:text-white mb-1">SKU</h4>
-              <p className="text-sm font-mono text-gray-600 dark:text-gray-400">
-                {product.sku}
-              </p>
-            </div>
-          )}
-
-          {/* Product Variants & Inventory Section */}
-          {product.variants && product.variants.length > 0 && (
-            <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-1.5 text-sm">
-                  <span>Product Variants & Inventory</span>
-                  <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-primary-100 text-primary-800 dark:bg-primary-950/60 dark:text-primary-300">
-                    {product.variants.length} options
-                  </span>
-                </h4>
+            <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-900/60 border border-gray-200/70 dark:border-gray-700/70">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Current Scraped Price</p>
+              <div className="flex items-baseline gap-3 flex-wrap">
+                <p className="text-3xl font-extrabold text-gray-900 dark:text-white">
+                  {formatPrice(product.price, product.currency)}
+                </p>
+                {product.normalized_price &&
+                  product.normalized_currency &&
+                  product.normalized_currency !== product.currency && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400">
+                      ≈ {product.normalized_currency} {product.normalized_price}
+                    </span>
+                  )}
+                {product.original_price && product.original_price > product.price && (
+                  <p className="text-sm text-gray-400 line-through">
+                    {formatPrice(product.original_price, product.currency)}
+                  </p>
+                )}
               </div>
-              
-              <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                {product.variants.map((v, idx) => (
-                  <div
-                    key={v.id || idx}
-                    className="p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex items-center justify-between gap-3 text-xs"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 dark:text-white truncate">
-                        {v.name}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5 text-gray-500 dark:text-gray-400 font-mono text-[11px]">
-                        {v.sku && <span>SKU: {v.sku}</span>}
-                        {v.stock_quantity !== null && v.stock_quantity !== undefined && (
-                          <span>Qty: {v.stock_quantity}</span>
-                        )}
-                        {v.attributes && Object.keys(v.attributes).length > 0 && (
-                          <span className="text-gray-600 dark:text-gray-300">
-                            {Object.entries(v.attributes).map(([k, val]) => `${k}: ${val}`).join(' • ')}
+
+              {(product.lowest_price || product.highest_price) && (
+                <div className="flex items-center gap-4 mt-2 pt-2 border-t border-gray-200/60 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400">
+                  {product.lowest_price && (
+                    <span>
+                      Lowest: <strong className="text-emerald-600 dark:text-emerald-400">{formatPrice(product.lowest_price, product.currency)}</strong>
+                    </span>
+                  )}
+                  {product.highest_price && (
+                    <span>
+                      Highest: <strong className="text-rose-600 dark:text-rose-400">{formatPrice(product.highest_price, product.currency)}</strong>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              {product.source_domain && (
+                <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/60">
+                  <span className="text-gray-400 block">Store Domain</span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200 truncate block mt-0.5">
+                    {product.source_domain}
+                  </span>
+                </div>
+              )}
+              {product.sku && (
+                <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/60">
+                  <span className="text-gray-400 block">SKU / Identifier</span>
+                  <span className="font-mono font-semibold text-gray-800 dark:text-gray-200 truncate block mt-0.5">
+                    {product.sku}
+                  </span>
+                </div>
+              )}
+              {product.category && (
+                <div className="p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/60 col-span-2">
+                  <span className="text-gray-400 block">Category Path</span>
+                  <span className="font-medium text-gray-800 dark:text-gray-200 block mt-0.5">
+                    {product.category_path || product.category}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {product.description && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                  Description
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-3 leading-relaxed">
+                  {product.description}
+                </p>
+              </div>
+            )}
+
+            {/* Product Variants & Inventory Section */}
+            {product.variants && product.variants.length > 0 && (
+              <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-1.5 text-xs uppercase tracking-wider">
+                    <span>Product Variants</span>
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary-100 text-primary-800 dark:bg-primary-950/60 dark:text-primary-300">
+                      {product.variants.length}
+                    </span>
+                  </h4>
+                </div>
+
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {product.variants.map((v, idx) => (
+                    <div
+                      key={v.id || idx}
+                      className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 flex items-center justify-between gap-3 text-xs"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-gray-900 dark:text-white truncate">
+                          {v.name}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 text-gray-500 dark:text-gray-400 font-mono text-[11px]">
+                          {v.sku && <span>SKU: {v.sku}</span>}
+                          {v.stock_quantity !== null && v.stock_quantity !== undefined && (
+                            <span>Qty: {v.stock_quantity}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-right shrink-0 flex items-center gap-2">
+                        {v.price !== null && v.price !== undefined && (
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {formatPrice(v.price, product.currency)}
                           </span>
                         )}
+                        <span
+                          className={cn(
+                            'inline-block px-1.5 py-0.5 rounded text-[10px] font-medium',
+                            v.in_stock
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400'
+                              : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400'
+                          )}
+                        >
+                          {v.in_stock ? 'In Stock' : 'Out'}
+                        </span>
                       </div>
                     </div>
-
-                    <div className="text-right shrink-0">
-                      {v.price !== null && v.price !== undefined ? (
-                        <p className="font-semibold text-gray-900 dark:text-white">
-                          £{v.price}
-                        </p>
-                      ) : null}
-                      <span className={cn(
-                        "inline-block px-1.5 py-0.5 rounded text-[10px] font-medium mt-0.5",
-                        v.in_stock
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400"
-                          : "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-400"
-                      )}>
-                        {v.stock_status || (v.in_stock ? 'In Stock' : 'Out of Stock')}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
+
+        {/* AI & Competitor Intelligence Action Grid */}
+        <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+              <SparklesIcon className="w-4 h-4 text-primary-500" />
+              Product Intelligence & Analytics Tools
+            </h4>
+            <span className="text-xs text-gray-400">Select a tool to launch deep analysis</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+            {intelligenceTools.map((tool) => (
+              <button
+                key={tool.name}
+                type="button"
+                onClick={tool.onClick}
+                className="flex items-start gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700/80 hover:border-primary-400 dark:hover:border-primary-500 bg-white dark:bg-gray-800/60 hover:bg-gray-50/80 dark:hover:bg-gray-800 text-left transition-all group shadow-sm"
+              >
+                <div className={cn('p-2 rounded-lg shrink-0 transition-transform group-hover:scale-105', tool.color)}>
+                  <tool.icon className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 truncate">
+                    {tool.name}
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 line-clamp-1 mt-0.5">
+                    {tool.desc}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -624,114 +819,22 @@ function ProductDetailModal({ product, isOpen, onClose, onOpenHistory, onOpenClu
         <Button variant="secondary" onClick={onClose}>
           Close
         </Button>
-        {product.match_cluster_id && onOpenCluster && (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              onClose()
-              onOpenCluster(product.match_cluster_id)
-            }}
-          >
-            <ArrowsRightLeftIcon className="w-4 h-4 mr-1.5 text-indigo-600" />
-            Competitor Prices
-          </Button>
-        )}
-        <Button
-          variant="secondary"
-          onClick={() => {
-            onClose()
-            onOpenHistory(product)
-          }}
-        >
-          <ChartBarIcon className="w-4 h-4 mr-1.5 text-primary-600" />
-          Price History & Trends
-        </Button>
-        {onOpenSentiment && (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              onClose()
-              onOpenSentiment(product)
-            }}
-          >
-            <ChatBubbleBottomCenterTextIcon className="w-4 h-4 mr-1.5 text-indigo-600" />
-            Reviews & Sentiment
-          </Button>
-        )}
-        {onOpenForecast && (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              onClose()
-              onOpenForecast(product)
-            }}
-          >
-            <BoltIcon className="w-4 h-4 mr-1.5 text-amber-500" />
-            Stock Velocity & Forecast
-          </Button>
-        )}
-        {onOpenSimulator && (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              onClose()
-              onOpenSimulator(product)
-            }}
-          >
-            <CalculatorIcon className="w-4 h-4 mr-1.5 text-primary-600" />
-            AI Pricing Simulator
-          </Button>
-        )}
-        {onOpenPromotions && (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              onClose()
-              onOpenPromotions(product)
-            }}
-          >
-            <TicketIcon className="w-4 h-4 mr-1.5 text-emerald-500" />
-            Coupons & Promos
-          </Button>
-        )}
-        {onOpenSerp && (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              onClose()
-              onOpenSerp(product)
-            }}
-          >
-            <MagnifyingGlassIcon className="w-4 h-4 mr-1.5 text-indigo-500" />
-            SERP Rankings
-          </Button>
-        )}
-        {onOpenBuyBox && (
-          <Button
-            variant="secondary"
-            onClick={() => {
-              onClose()
-              onOpenBuyBox(product)
-            }}
-          >
-            <TrophyIcon className="w-4 h-4 mr-1.5 text-amber-500" />
-            Buy Box Intelligence
-          </Button>
-        )}
         {onOpenSync && (
           <Button
             variant="primary"
+            icon={CloudArrowUpIcon}
             onClick={() => {
               onClose()
               onOpenSync(product)
             }}
           >
-            <CloudArrowUpIcon className="w-4 h-4 mr-1.5" />
-            Export & Sync
+            Export & Sync Product
           </Button>
         )}
         <a href={product.url} target="_blank" rel="noopener noreferrer">
-          <Button variant="outline">View on Website</Button>
+          <Button variant="outline" icon={ArrowTopRightOnSquareIcon}>
+            View on Store
+          </Button>
         </a>
       </ModalFooter>
     </Modal>

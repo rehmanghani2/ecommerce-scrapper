@@ -49,102 +49,211 @@ import toast from 'react-hot-toast'
 
 export default function Settings() {
   const { user, refreshUser } = useAuth()
-  const [activeTab, setActiveTab] = useState(0)
+  const [activeKey, setActiveKey] = useState(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('tab') || 'profile'
+  })
 
-  const tabs = [
+  const categories = [
     {
-      key: 'profile',
-      label: 'Profile',
-      icon: UserCircleIcon,
-      content: <ProfileSettings user={user} onUpdate={refreshUser} />,
+      title: 'Account & Preferences',
+      items: [
+        {
+          key: 'profile',
+          label: 'Profile',
+          desc: 'Personal details & account identity',
+          icon: UserCircleIcon,
+          content: <ProfileSettings user={user} onUpdate={refreshUser} />,
+        },
+        {
+          key: 'security',
+          label: 'Security & API Keys',
+          desc: 'Passwords, sessions & access tokens',
+          icon: ShieldCheckIcon,
+          content: <SecuritySettings />,
+        },
+        {
+          key: 'appearance',
+          label: 'Appearance',
+          desc: 'Dark mode & interface density',
+          icon: PaintBrushIcon,
+          content: <AppearanceSettings />,
+        },
+      ],
     },
     {
-      key: 'security',
-      label: 'Security',
-      icon: ShieldCheckIcon,
-      content: <SecuritySettings />,
+      title: 'Scraping & Anti-Bot',
+      items: [
+        {
+          key: 'scraping',
+          label: 'Scraping Engine',
+          desc: 'Playwright, AI keys & default limits',
+          icon: GlobeAltIcon,
+          content: <ScrapingSettings />,
+        },
+        {
+          key: 'throttling',
+          label: 'Rate Limiting & Throttling',
+          desc: 'Adaptive AIMD delays & domain concurrency',
+          icon: AdjustmentsHorizontalIcon,
+          badge: 'Auto',
+          content: <DomainThrottlingSettings />,
+        },
+      ],
     },
     {
-      key: 'notifications',
-      label: 'Notifications & Webhooks',
-      icon: BellIcon,
-      content: <NotificationDispatchSettings />,
+      title: 'Pricing & Intelligence',
+      items: [
+        {
+          key: 'repricing',
+          label: 'Automated Repricing',
+          desc: 'Dynamic competitor undercut & floor rules',
+          icon: ScaleIcon,
+          badge: 'AI',
+          content: <RepricingSettings />,
+        },
+        {
+          key: 'currency',
+          label: 'Multi-Currency FX',
+          desc: 'Live exchange rates & base normalization',
+          icon: CurrencyDollarIcon,
+          content: <CurrencySettings />,
+        },
+        {
+          key: 'notifications',
+          label: 'Alerts & Webhooks',
+          desc: 'Slack, Discord, Telegram & price drop rules',
+          icon: BellIcon,
+          content: <NotificationDispatchSettings />,
+        },
+      ],
     },
     {
-      key: 'scraping',
-      label: 'Scraping',
-      icon: GlobeAltIcon,
-      content: <ScrapingSettings />,
-    },
-    {
-      key: 'integrations',
-      label: 'Store Integrations',
-      icon: CloudArrowUpIcon,
-      content: <IntegrationsSettings />,
-    },
-    {
-      key: 'cloudinary',
-      label: 'Cloudinary CDN',
-      icon: PhotoIcon,
-      content: <CloudinarySettings />,
-    },
-    {
-      key: 's3',
-      label: 'AWS S3 / Cloud Storage',
-      icon: ServerStackIcon,
-      content: <S3StorageSettings />,
-    },
-    {
-      key: 'supabase',
-      label: 'Supabase Free Storage',
-      icon: CircleStackIcon,
-      content: <SupabaseStorageSettings />,
-    },
-    {
-      key: 'currency',
-      label: 'Multi-Currency Normalization',
-      icon: CurrencyDollarIcon,
-      content: <CurrencySettings />,
-    },
-    {
-      key: 'repricing',
-      label: 'Automated Repricing',
-      icon: ScaleIcon,
-      content: <RepricingSettings />,
-    },
-    {
-      key: 'throttling',
-      label: 'Rate Limiting & Auto-Throttling',
-      icon: AdjustmentsHorizontalIcon,
-      content: <DomainThrottlingSettings />,
-    },
-    {
-      key: 'appearance',
-      label: 'Appearance',
-      icon: PaintBrushIcon,
-      content: <AppearanceSettings />,
+      title: 'Store Sync & Cloud Storage',
+      items: [
+        {
+          key: 'integrations',
+          label: 'Store Integrations',
+          desc: 'Shopify & WooCommerce 1-click catalog sync',
+          icon: CloudArrowUpIcon,
+          content: <IntegrationsSettings />,
+        },
+        {
+          key: 'cloudinary',
+          label: 'Cloudinary CDN',
+          desc: 'Automated product image optimization',
+          icon: PhotoIcon,
+          content: <CloudinarySettings />,
+        },
+        {
+          key: 's3',
+          label: 'AWS S3 / R2 Storage',
+          desc: 'S3-compatible object storage bucket sync',
+          icon: ServerStackIcon,
+          content: <S3StorageSettings />,
+        },
+        {
+          key: 'supabase',
+          label: 'Supabase Storage',
+          desc: 'Free cloud bucket media hosting',
+          icon: CircleStackIcon,
+          content: <SupabaseStorageSettings />,
+        },
+      ],
     },
   ]
+
+  const allItems = categories.flatMap((c) => c.items)
+  const activeItem = allItems.find((i) => i.key === activeKey) || allItems[0]
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-          <Cog6ToothIcon className="w-8 h-8 text-primary-600" />
-          Settings
-        </h1>
-        <p className="text-gray-500 dark:text-gray-400 mt-1">
-          Manage your account and application preferences
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+            <Cog6ToothIcon className="w-8 h-8 text-primary-600" />
+            Platform Settings & Integrations
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
+            Configure scraping engines, automated repricing, multi-channel webhooks, and cloud storage
+          </p>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <UnderlineTabs
-        tabs={tabs}
-        selectedIndex={activeTab}
-        onChange={setActiveTab}
-      />
+      {/* 2-Column Categorized Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Navigation Sidebar */}
+        <div className="lg:col-span-3 bg-white dark:bg-gray-800/90 rounded-2xl border border-gray-200 dark:border-gray-700/80 p-3 shadow-sm space-y-5">
+          {categories.map((category) => (
+            <div key={category.title}>
+              <p className="px-3 mb-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                {category.title}
+              </p>
+              <div className="space-y-1">
+                {category.items.map((item) => {
+                  const isSelected = activeItem.key === item.key
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setActiveKey(item.key)}
+                      className={cn(
+                        'w-full flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all duration-150',
+                        isSelected
+                          ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-semibold shadow-sm ring-1 ring-primary-200 dark:ring-primary-800/60'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-gray-200'
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <item.icon
+                          className={cn(
+                            'w-5 h-5 shrink-0',
+                            isSelected
+                              ? 'text-primary-600 dark:text-primary-400'
+                              : 'text-gray-400 dark:text-gray-500'
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm truncate">{item.label}</p>
+                        </div>
+                      </div>
+                      {item.badge && (
+                        <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary-100 text-primary-700 dark:bg-primary-900/60 dark:text-primary-300">
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Right Active Setting Content */}
+        <div className="lg:col-span-9 space-y-4">
+          {/* Active Section Banner */}
+          <div className="bg-white dark:bg-gray-800/90 rounded-2xl border border-gray-200 dark:border-gray-700/80 px-6 py-4 shadow-sm flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="p-2.5 rounded-xl bg-primary-50 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400">
+                <activeItem.icon className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                  {activeItem.label}
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {activeItem.desc}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Active Component Panel */}
+          <div>{activeItem.content}</div>
+        </div>
+      </div>
     </div>
   )
 }

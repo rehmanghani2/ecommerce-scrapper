@@ -63,7 +63,7 @@ export function UnderlineTabs({ tabs, selectedIndex, onChange, className }) {
     <Tab.Group selectedIndex={selectedIndex} onChange={onChange}>
       <Tab.List
         className={cn(
-          'flex border-b border-gray-200 dark:border-gray-700',
+          'flex overflow-x-auto border-b border-gray-200 dark:border-gray-700 scrollbar-thin',
           className
         )}
       >
@@ -73,7 +73,7 @@ export function UnderlineTabs({ tabs, selectedIndex, onChange, className }) {
             disabled={tab.disabled}
             className={({ selected }) =>
               cn(
-                'px-4 py-2.5 text-sm font-medium focus:outline-none',
+                'px-4 py-2.5 text-sm font-medium whitespace-nowrap shrink-0 focus:outline-none',
                 'border-b-2 -mb-px transition-colors duration-200',
                 selected
                   ? 'border-primary-500 text-primary-600 dark:text-primary-400'

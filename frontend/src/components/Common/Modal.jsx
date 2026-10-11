@@ -107,7 +107,7 @@ export function Modal({
 // Modal Footer component for consistent button placement
 export function ModalFooter({ children, className }) {
   return (
-    <div className={cn('flex items-center justify-end gap-3 mt-6 pt-4 border-t dark:border-gray-700', className)}>
+    <div className={cn('flex items-center justify-end gap-3 flex-wrap mt-6 pt-4 border-t dark:border-gray-700', className)}>
       {children}
     </div>
   )
