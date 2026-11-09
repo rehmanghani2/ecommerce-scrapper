@@ -137,10 +137,10 @@ def _is_pagination_candidate(url: str, label: str = "", rel: str = "") -> bool:
     pagination_keys = {"page", "p", "pageno", "pagenum", "page_number", "offset", "start"}
     if query_keys & pagination_keys:
         return True
-    if re.search(r"/page/\\d+(?:/|$)", parsed.path, re.I):
+    if re.search(r"/page/\d+(?:/|$)", parsed.path, re.I):
         return True
     return rel.strip().lower() == "next" or bool(
-        re.search(r"\\b(next|next page|older products)\\b", label, re.I)
+        re.search(r"\b(next|next page|older products)\b", label, re.I)
     )
 
 
