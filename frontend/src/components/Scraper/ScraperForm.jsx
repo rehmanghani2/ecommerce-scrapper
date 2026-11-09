@@ -59,7 +59,15 @@ export function ScraperForm() {
 
   // Mutations
   const analyzeMutation = useMutation({
-    mutationFn: async () => {\n      const [discovery, preview] = await Promise.allSettled([\n        scraperService.discoverWebsite(url),\n        scraperService.previewScraping(url),\n      ])\n      if (discovery.status === 'rejected') throw discovery.reason\n      const selectorPreview = preview.status === 'fulfilled' ? preview.value : {}\n      return { ...selectorPreview, ...discovery.value, selectors: selectorPreview.selectors || {} }\n    },
+    mutationFn: async () => {
+      const [discovery, preview] = await Promise.allSettled([
+        scraperService.discoverWebsite(url),
+        scraperService.previewScraping(url),
+      ])
+      if (discovery.status === 'rejected') throw discovery.reason
+      const selectorPreview = preview.status === 'fulfilled' ? preview.value : {}
+      return { ...selectorPreview, ...discovery.value, selectors: selectorPreview.selectors || {} }
+    },
     onSuccess: (data) => {
       setPreviewData(data)
       if (data.selectors && Object.keys(data.selectors).length) {
