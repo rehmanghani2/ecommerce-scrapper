@@ -7,7 +7,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from '@heroicons/react/24/outline'
-import { cn } from '@/utils/helpers'
+import { isValidUrl } from '@/utils/helpers'
 import {
   Card,
   CardHeader,
@@ -15,7 +15,6 @@ import {
   Button,
   Input,
   Select,
-  Alert,
 } from '@/components/Common'
 import scraperService from '@/services/scraperService'
 import toast from 'react-hot-toast'
@@ -90,7 +89,6 @@ export function ScraperForm() {
       if (data.success && data.products) {
         setPreviewData({
           platform: 'AI Zero-Shot (Gemini)',
-          confidence: 0.95,
           sample_products: data.products.map((p) => ({
             name: p.name,
             price: p.price != null ? `${p.currency || '$'}${p.price}` : null,
@@ -148,9 +146,23 @@ export function ScraperForm() {
     setConfig((prev) => ({ ...prev, [key]: value }))
   }
 
+  const handleUrlChange = (nextUrl) => {
+    setUrl(nextUrl)
+    setPreviewData(null)
+    setTestResults({})
+  }
+
+  const handleAnalyze = () => {
+    if (!isValidUrl(url)) {
+      toast.error('Enter a valid website URL, including https://')
+      return
+    }
+    analyzeMutation.mutate()
+  }
+
   const handleStartScraping = () => {
-    if (!url) {
-      toast.error('Please enter a URL')
+    if (!isValidUrl(url)) {
+      toast.error('Enter a valid website URL before starting a scrape')
       return
     }
     startScrapingMutation.mutate()
@@ -168,8 +180,8 @@ export function ScraperForm() {
           
           <UrlInput
             value={url}
-            onChange={setUrl}
-            onAnalyze={() => analyzeMutation.mutate()}
+            onChange={handleUrlChange}
+            onAnalyze={handleAnalyze}
             onAIExtract={() => aiExtractMutation.mutate()}
             aiExtractLoading={aiExtractMutation.isPending}
             onOpenVisualPicker={() => setVisualPickerOpen(true)}
@@ -204,7 +216,7 @@ export function ScraperForm() {
                 label="Max Pages"
                 type="number"
                 value={config.max_pages}
-                onChange={(e) => handleConfigChange('max_pages', parseInt(e.target.value))}
+                onChange={(e) => handleConfigChange('max_pages', Math.max(1, Number(e.target.value) || 1))}
                 min={1}
                 max={10000}
               />
@@ -213,7 +225,7 @@ export function ScraperForm() {
                 label="Max Products"
                 type="number"
                 value={config.max_products}
-                onChange={(e) => handleConfigChange('max_products', parseInt(e.target.value))}
+                onChange={(e) => handleConfigChange('max_products', Math.max(1, Number(e.target.value) || 1))}
                 min={1}
                 max={100000}
               />
@@ -286,7 +298,7 @@ export function ScraperForm() {
                   label="Request Delay (ms)"
                   type="number"
                   value={config.request_delay}
-                  onChange={(e) => handleConfigChange('request_delay', parseInt(e.target.value))}
+                  onChange={(e) => handleConfigChange('request_delay', Math.max(0, Number(e.target.value) || 0))}
                   hint="Delay between requests to avoid rate limiting"
                   min={0}
                   max={30000}
@@ -310,6 +322,7 @@ export function ScraperForm() {
         {/* Start Button */}
         <Button
           onClick={handleStartScraping}
+          disabled={!isValidUrl(url) || startScrapingMutation.isPending}
           loading={startScrapingMutation.isPending}
           icon={PlayIcon}
           size="lg"

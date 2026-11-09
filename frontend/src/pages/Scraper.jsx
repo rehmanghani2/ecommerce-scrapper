@@ -37,7 +37,7 @@ export default function Scraper() {
           Web Scraper
         </h1>
         <p className="text-gray-500 dark:text-gray-400 mt-1">
-          Extract product data from any e-commerce website or crawl 10,000+ products via Sitemap XML / CSV
+          Analyze a store, review detected extraction patterns, then configure and launch a product crawl.
         </p>
       </div>
 
