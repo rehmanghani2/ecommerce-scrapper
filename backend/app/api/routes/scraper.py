@@ -168,7 +168,7 @@ async def discover_website(payload: Dict[str, Any]):
                 raise HTTPException(status_code=400, detail="The website redirected to a non-public address.")
 
             page_data = await page.evaluate("""() => {
-              const text = (el) => (el?.innerText || el?.textContent || '').trim().replace(/\\s+/g, ' ');
+              const text = (el) => (el?.innerText || el?.textContent || '').trim().replace(/\s+/g, ' ');
               const anchors = Array.from(document.querySelectorAll('a[href]')).slice(0, 500).map(a => ({
                 href: a.getAttribute('href'),
                 label: text(a).slice(0, 180),
@@ -188,7 +188,7 @@ async def discover_website(payload: Dict[str, Any]):
                 productNodeCount: productNodes.length,
                 headings: Array.from(document.querySelectorAll('h1,h2')).slice(0, 30).map(text),
                 platformSignals: {
-                  shopify: /cdn\\.shopify\\.com|Shopify\\.theme|shopify-section/i.test(document.documentElement.innerHTML),
+                  shopify: /cdn\.shopify\.com|Shopify\.theme|shopify-section/i.test(document.documentElement.innerHTML),
                   woocommerce: /woocommerce|wc-block/i.test(document.documentElement.innerHTML),
                   magento: /Magento_|mage\\//i.test(document.documentElement.innerHTML),
                   bigcommerce: /bigcommerce|stencil-utils/i.test(document.documentElement.innerHTML),
@@ -235,7 +235,7 @@ async def discover_website(payload: Dict[str, Any]):
                         continue
                     body = await sitemap_response.text()
                     if sitemap_url.endswith("robots.txt"):
-                        sitemap_locations = re.findall(r"(?im)^sitemap:\\s*(https?://\\S+)", body)
+                        sitemap_locations = re.findall(r"(?im)^sitemap:\s*(https?://\\S+)", body)
                         sitemap_candidates.extend(sitemap_locations[:5])
                         continue
                     root = ElementTree.fromstring(body[:2_000_000])
