@@ -77,7 +77,7 @@ export default function Dashboard() {
   const { data: runningJobs } = useJobs({ status: 'running', page_size: 5 })
   const { data: latestJobsData } = useJobs({ page_size: 4 })
 
-  const activeJobsCount = runningJobs?.jobs?.length || 0
+  const activeJobsCount = stats?.running_jobs || 0
   const latestJobs = latestJobsData?.jobs || []
 
   return (
@@ -118,10 +118,7 @@ export default function Dashboard() {
                   {activeJobsCount} job{activeJobsCount > 1 ? 's' : ''} currently running
                 </p>
                 <p className="text-sm text-primary-700 dark:text-primary-300">
-                  {formatNumber(
-                    runningJobs?.jobs?.reduce((sum, j) => sum + (j.total_products || 0), 0) || 0
-                  )}{' '}
-                  products scraped so far
+                  Monitor live progress, processed pages, and extracted products.
                 </p>
               </div>
             </div>
