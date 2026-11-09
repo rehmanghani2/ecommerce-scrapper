@@ -50,7 +50,7 @@ export function PreviewPanel({
     )
   }
 
-  const { platform, confidence, selectors, sample_products = [] } = data
+  const { platform, confidence = 0, selectors, sample_products = [], discovery } = data
 
   return (
     <div className="space-y-4">
@@ -108,7 +108,58 @@ export function PreviewPanel({
         )}
       </Card>
 
-      {/* Sample Products */}
+
+      {discovery && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Website discovery</CardTitle>
+          </CardHeader>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
+              <p className="text-gray-500 dark:text-gray-400">Categories found</p>
+              <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{discovery.category_count ?? discovery.categories?.length ?? 0}</p>
+            </div>
+            <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
+              <p className="text-gray-500 dark:text-gray-400">Product URL samples</p>
+              <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{discovery.product_url_count_estimate ?? discovery.product_url_samples?.length ?? 0}</p>
+            </div>
+            <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
+              <p className="text-gray-500 dark:text-gray-400">Sitemap</p>
+              <p className="mt-1 font-medium capitalize text-gray-900 dark:text-white">{discovery.sitemap_status || 'Not found'}</p>
+            </div>
+            <div className="rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
+              <p className="text-gray-500 dark:text-gray-400">Products on landing page</p>
+              <p className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{discovery.product_dom_nodes_on_landing_page ?? 0}</p>
+            </div>
+          </div>
+          {discovery.categories?.length > 0 ? (
+            <div className="mt-4">
+              <p className="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-200">Detected categories</p>
+              <div className="max-h-72 space-y-2 overflow-y-auto">
+                {discovery.categories.map((category, index) => (
+                  <div key={category.url || index} className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 dark:border-gray-700 px-3 py-2">
+                    <span className="min-w-0 truncate text-sm text-gray-800 dark:text-gray-200">{category.name}</span>
+                    <a href={category.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-primary-600 hover:underline">Open</a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">No category links were confidently identified on the landing page or sitemap.</p>
+          )}
+          {discovery.product_url_samples?.length > 0 && (
+            <div className="mt-4">
+              <p className="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-200">Product URL samples</p>
+              <ul className="max-h-40 space-y-1 overflow-y-auto text-xs text-gray-500 dark:text-gray-400">
+                {discovery.product_url_samples.slice(0, 10).map((productUrl) => <li key={productUrl} className="truncate">{productUrl}</li>)}
+              </ul>
+            </div>
+          )}
+          {discovery.truncated && <p className="mt-3 text-xs text-amber-600">Discovery was capped at the configured link limit.</p>}
+          {data.limitations?.length > 0 && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{data.limitations[0]}</p>}
+        </Card>
+      )}
+\n      {/* Sample Products */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
