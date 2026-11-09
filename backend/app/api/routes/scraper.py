@@ -300,7 +300,7 @@ async def discover_website(payload: Dict[str, Any]):
                             continue
                         await crawl_page.wait_for_timeout(350)
                         page_links = await crawl_page.locator("a[href]").evaluate_all(
-                            "(els) => els.slice(0, 600).map(a => ({href:a.getAttribute('href'), label:(a.innerText || a.getAttribute('aria-label') || '').trim().replace(/\\s+/g,' ').slice(0,180)}))"
+                            "(els) => els.slice(0, 600).map(a => ({href:a.getAttribute('href'), label:(a.innerText || a.getAttribute('aria-label') || '').trim().replace(/\s+/g,' ').slice(0,180)}))"
                         )
                         next_page_urls = []
                         for link in page_links:
