@@ -94,7 +94,12 @@ def _parse_origins(raw: str) -> list:
         return ["*"]
     if raw.startswith("["):
         import json
-        return json.loads(raw)
+        try:
+            return json.loads(raw)
+        except Exception:
+            # Fallback for malformed string like ["a","b",*]
+            cleaned = raw.strip("[]").replace('"', '').replace("'", '')
+            return [o.strip() for o in cleaned.split(",") if o.strip()]
     return [o.strip() for o in raw.split(",") if o.strip()]
 
 # Add CORS middleware

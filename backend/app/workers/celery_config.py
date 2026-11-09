@@ -7,8 +7,16 @@ from datetime import timedelta
 import os
 
 # Broker settings
-broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
-result_backend = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
+broker_url = os.getenv("CELERY_BROKER_URL") or os.getenv("REDIS_URL", "redis://localhost:6379/0")
+result_backend = os.getenv("CELERY_RESULT_BACKEND") or os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+# If using Upstash (rediss://), configure SSL settings for Celery
+broker_use_ssl = None
+redis_backend_use_ssl = None
+if broker_url.startswith("rediss://"):
+    import ssl
+    broker_use_ssl = {"ssl_cert_reqs": ssl.CERT_NONE}
+    redis_backend_use_ssl = {"ssl_cert_reqs": ssl.CERT_NONE}
 
 # Task settings
 task_serializer = "json"
