@@ -122,6 +122,7 @@ class ScraperConfig(BaseModel):
     url_patterns: Optional[List[str]] = None  # Include only matching URLs
     exclude_patterns: Optional[List[str]] = None  # Exclude matching URLs
     category_filter: Optional[List[str]] = None  # Only scrape specific categories
+    category_urls: Optional[List[str]] = None  # Explicit category URLs selected in discovery
     
     # Advanced
     javascript_rendering: bool = True

@@ -20,6 +20,7 @@ class PlaywrightScraper:
         job_id: int,
         start_url: str,
         *,
+        start_urls: Optional[List[str]] = None,
         max_pages: int = 100,
         max_products: int = 10000,
         max_depth: int = 3,
@@ -57,7 +58,8 @@ class PlaywrightScraper:
         self.on_page_done = on_page_done
 
         self._visited: set = set()
-        self._queue: List[tuple] = [(self.start_url, 0)]  # (url, depth)
+        seed_urls = list(dict.fromkeys([u.rstrip("/") for u in (start_urls or [self.start_url]) if u]))
+        self._queue: List[tuple] = [(seed_url, 0) for seed_url in seed_urls]  # (url, depth)
         self._total_products = 0
 
     async def _log(self, message: str, level: str = "info"):

@@ -260,16 +260,117 @@ async def discover_website(payload: Dict[str, Any]):
                 elif product_pattern.search(path):
                     product_candidates.append(sitemap_url)
 
-            unique_categories = []
-            category_seen = set()
+            # Crawl category/listing pages recursively. Keep this analysis bounded;
+            # the full scrape job uses its own page/product limits.
+            category_pattern = re.compile(r"/(category|categories|collection|collections|department|departments|c|catalog)/", re.I)
+            product_pattern = re.compile(r"/(product|products|p|item|dp)/", re.I)
+            excluded_pattern = re.compile(r"/(account|login|cart|checkout|search|blog|news|contact|about)(/|$)", re.I)
+            category_by_url = {}
+            category_queue = []
             for item in category_items:
-                if item["url"] not in category_seen:
-                    category_seen.add(item["url"])
-                    unique_categories.append(item)
-                if len(unique_categories) >= _DISCOVERY_MAX_CATEGORIES:
-                    break
+                candidate = item["url"]
+                if candidate not in category_by_url:
+                    node = {
+                        "name": item["name"],
+                        "url": candidate,
+                        "depth": 1,
+                        "parent_url": None,
+                        "children": [],
+                        "source": item.get("source", "navigation"),
+                    }
+                    category_by_url[candidate] = node
+                    category_queue.append((candidate, 1, None))
 
-            unique_products = list(dict.fromkeys(product_candidates))[:100]
+            crawled_category_pages = set()
+            listing_pages = set()
+            pagination_pages = 0
+            recursive_product_urls = set(product_candidates)
+            max_category_depth = 3
+            max_listing_pages_per_category = 4
+            crawl_page = await context.new_page()
+            try:
+                while category_queue and len(crawled_category_pages) < _DISCOVERY_MAX_CATEGORIES:
+                    category_url, depth, parent_url = category_queue.pop(0)
+                    if category_url in crawled_category_pages or depth > max_category_depth:
+                        continue
+                    crawled_category_pages.add(category_url)
+                    try:
+                        category_response = await crawl_page.goto(category_url, wait_until="domcontentloaded", timeout=_DISCOVERY_TIMEOUT_MS)
+                        if not category_response or category_response.status >= 400:
+                            continue
+                        await crawl_page.wait_for_timeout(350)
+                        page_links = await crawl_page.locator("a[href]").evaluate_all(
+                            "(els) => els.slice(0, 600).map(a => ({href:a.getAttribute('href'), label:(a.innerText || a.getAttribute('aria-label') || '').trim().replace(/\s+/g,' ').slice(0,180)}))"
+                        )
+                        next_page_urls = []
+                        for link in page_links:
+                            candidate = _normalise_discovery_url(link.get("href"), category_url)
+                            if not candidate or excluded_pattern.search(urlparse(candidate).path):
+                                continue
+                            path = urlparse(candidate).path
+                            label = link.get("label") or path.rstrip("/").split("/")[-1].replace("-", " ").title()
+                            if product_pattern.search(path):
+                                recursive_product_urls.add(candidate)
+                            elif category_pattern.search(path) and candidate not in category_by_url:
+                                child = {
+                                    "name": label[:120],
+                                    "url": candidate,
+                                    "depth": depth + 1,
+                                    "parent_url": category_url,
+                                    "children": [],
+                                    "source": "category_page",
+                                }
+                                category_by_url[candidate] = child
+                                category_queue.append((candidate, depth + 1, category_url))
+                            elif any(token in path.lower() for token in ("page=", "p=", "/page/")) or "next" in label.lower():
+                                next_page_urls.append(candidate)
+
+                        # Product cards can use opaque URLs without /product/ in their path.
+                        card_links = await crawl_page.locator(
+                            "article a[href], [class*='product'] a[href], [data-testid*='product'] a[href], [itemtype*='Product'] a[href]"
+                        ).evaluate_all("(els) => els.slice(0, 300).map(a => a.href)")
+                        for href in card_links:
+                            candidate = _normalise_discovery_url(href, category_url)
+                            if candidate and candidate != category_url:
+                                recursive_product_urls.add(candidate)
+
+                        # Follow a small number of listing pagination links, not arbitrary site links.
+                        for next_url in list(dict.fromkeys(next_page_urls))[:max_listing_pages_per_category - 1]:
+                            if next_url in listing_pages:
+                                continue
+                            listing_pages.add(next_url)
+                            try:
+                                next_response = await crawl_page.goto(next_url, wait_until="domcontentloaded", timeout=_DISCOVERY_TIMEOUT_MS)
+                                if not next_response or next_response.status >= 400:
+                                    continue
+                                pagination_pages += 1
+                                page_product_links = await crawl_page.locator(
+                                    "a[href*='/product/'], a[href*='/products/'], article a[href], [class*='product'] a[href], [data-testid*='product'] a[href]"
+                                ).evaluate_all("(els) => els.slice(0, 300).map(a => a.href)")
+                                for href in page_product_links:
+                                    candidate = _normalise_discovery_url(href, next_url)
+                                    if candidate and candidate != next_url:
+                                        recursive_product_urls.add(candidate)
+                            except Exception as pagination_error:
+                                logger.debug("Pagination discovery failed for %s: %s", next_url, pagination_error)
+                    except Exception as category_error:
+                        logger.debug("Category discovery failed for %s: %s", category_url, category_error)
+            finally:
+                await crawl_page.close()
+
+            # Build an explicit tree while retaining a flat list for existing clients.
+            category_tree = []
+            for node in category_by_url.values():
+                if node["parent_url"] and node["parent_url"] in category_by_url:
+                    category_by_url[node["parent_url"]]["children"].append(node)
+                else:
+                    category_tree.append(node)
+
+            unique_categories = list(category_by_url.values())[:_DISCOVERY_MAX_CATEGORIES]
+            unique_products = list(dict.fromkeys(
+                candidate for candidate in recursive_product_urls
+                if urlparse(candidate).hostname == urlparse(final_url).hostname
+            ))[:500]
             detector = PatternDetector()
             domain_detection = detector.detect_by_domain(final_url)
             platform_signals = page_data.get("platformSignals", {})
@@ -288,7 +389,12 @@ async def discover_website(payload: Dict[str, Any]):
                 "platform_signals": platform_signals,
                 "discovery": {
                     "categories": unique_categories,
+                    "category_tree": category_tree,
                     "category_count": len(unique_categories),
+                    "category_pages_crawled": len(crawled_category_pages),
+                    "listing_pages_crawled": len(listing_pages),
+                    "pagination_pages_crawled": pagination_pages,
+                    "product_urls": unique_products,
                     "product_url_samples": unique_products[:30],
                     "product_url_count_estimate": len(unique_products),
                     "product_dom_nodes_on_landing_page": page_data.get("productNodeCount", 0),
@@ -299,7 +405,8 @@ async def discover_website(payload: Dict[str, Any]):
                 },
                 "limitations": [
                     "Counts are discovery samples, not a guaranteed total catalogue size.",
-                    "Category hierarchy is inferred from navigation and sitemap URL patterns.",
+                    "Category hierarchy is inferred from same-domain navigation links and bounded recursive category-page crawling.",
+                    "Discovery crawls at most 100 category pages, depth 3, and 4 listing pages per category; this is not a complete catalogue guarantee.",
                     "Some stores expose categories or products only after interaction or authentication.",
                 ],
             }
@@ -1166,6 +1273,16 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
 
             use_pw = bool(config and getattr(config, 'javascript_rendering', False))
             domain_lower = url.lower()
+            selected_category_urls = list(dict.fromkeys(getattr(config, "category_urls", None) or [])) if config else []
+            if selected_category_urls:
+                root_host = (urlparse(url).hostname or "").lower()
+                for category_url in selected_category_urls:
+                    parsed_category = urlparse(category_url)
+                    if parsed_category.scheme not in ("http", "https") or (parsed_category.hostname or "").lower() != root_host:
+                        raise ValueError("Selected category URLs must belong to the original website.")
+                await write_log(f"Starting from {len(selected_category_urls)} selected category URLs.", "info")
+            else:
+                selected_category_urls = [url]
             if any(m in domain_lower for m in ("amazon.", "ebay.", "walmart.", "etsy.", "wix.")) or detected_platform in ("amazon", "ebay", "walmart", "etsy", "wix"):
                 use_pw = True
 
@@ -1174,6 +1291,7 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                 scraper = PlaywrightScraper(
                     job_id=job_id,
                     start_url=url,
+                    start_urls=selected_category_urls,
                     max_pages=max_pages,
                     max_products=max_products,
                     max_depth=max_depth,
@@ -1187,6 +1305,7 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                 scraper = HttpxScraper(
                     job_id=job_id,
                     start_url=url,
+                    start_urls=selected_category_urls,
                     max_pages=max_pages,
                     max_products=max_products,
                     max_depth=max_depth,
