@@ -955,8 +955,19 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
 
                                 if p_text:
                                     existing_p.price_text = p_text
+                                for field in ("name", "description", "sku", "brand", "category", "subcategory", "category_path"):
+                                    value = data.get(field)
+                                    if value:
+                                        setattr(existing_p, field, value[:500] if field == "name" else value)
                                 if data.get("image_url"):
                                     existing_p.image_url = data.get("image_url")
+                                availability = str(data.get("availability") or "").lower()
+                                if availability:
+                                    existing_p.in_stock = not any(token in availability for token in ("outofstock", "soldout", "out of stock", "unavailable"))
+                                    existing_p.stock_status = availability
+                                if data.get("stock_quantity") is not None:
+                                    existing_p.stock_quantity = data.get("stock_quantity")
+                                existing_p.raw_data = {**(existing_p.raw_data or {}), **data}
                                 existing_p.currency = p_curr
                                 existing_p.normalized_price = p_norm_price
                                 existing_p.normalized_currency = p_target_curr
@@ -994,6 +1005,15 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                                     normalized_currency=p_target_curr,
                                     exchange_rate=p_rate,
                                     image_url=data.get("image_url"),
+                                    description=data.get("description"),
+                                    title=data.get("title"),
+                                    category=data.get("category"),
+                                    subcategory=data.get("subcategory"),
+                                    category_path=data.get("category_path"),
+                                    in_stock=not any(token in str(data.get("availability") or "").lower() for token in ("outofstock", "soldout", "out of stock", "unavailable")),
+                                    stock_quantity=data.get("stock_quantity"),
+                                    stock_status=data.get("availability"),
+                                    raw_data=data,
                                     source_domain=domain,
                                 )
 
