@@ -174,7 +174,8 @@ export function PreviewPanel({
           {data.limitations?.length > 0 && <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">{data.limitations[0]}</p>}
         </Card>
       )}
-\n      {/* Sample Products */}
+
+      {/* Sample Products */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
