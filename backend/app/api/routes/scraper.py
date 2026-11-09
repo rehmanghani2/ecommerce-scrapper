@@ -91,7 +91,229 @@ async def start_scraping(
         )
 
 
-# @router.post("/preview", response_model=DetectedSelectors)
+# 
+# Website discovery limits are intentionally bounded for interactive analysis.
+_DISCOVERY_MAX_LINKS = 500
+_DISCOVERY_MAX_CATEGORIES = 100
+_DISCOVERY_TIMEOUT_MS = 25000
+
+
+def _is_public_target(url: str) -> bool:
+    """Reject non-HTTP and private/local targets before opening a browser."""
+    import ipaddress
+    import socket
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return False
+    host = parsed.hostname.lower().strip(".")
+    if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
+        return False
+    try:
+        addresses = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))
+        return bool(addresses) and all(
+            ipaddress.ip_address(item[4][0]).is_global for item in addresses
+        )
+    except (OSError, ValueError):
+        return False
+
+
+def _normalise_discovery_url(href: str, base_url: str) -> Optional[str]:
+    from urllib.parse import urljoin, urldefrag, urlparse
+    if not href:
+        return None
+    candidate = urldefrag(urljoin(base_url, href.strip()))[0]
+    parsed = urlparse(candidate)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return None
+    if parsed.hostname.lower() != urlparse(base_url).hostname.lower():
+        return None
+    if any(token in candidate.lower() for token in ("javascript:", "mailto:", "tel:")):
+        return None
+    return candidate
+
+
+@router.post("/discover")
+async def discover_website(payload: Dict[str, Any]):
+    """
+    Render a public storefront with Playwright and return a bounded discovery
+    report: platform hints, navigation categories, sitemap locations and
+    candidate product/listing URLs. This is an analysis preview, not a crawl.
+    """
+    url = payload.get("url")
+    if not isinstance(url, str) or not _is_public_target(url):
+        raise HTTPException(status_code=400, detail="Provide a valid public HTTP or HTTPS website URL.")
+
+    from playwright.async_api import async_playwright
+    from urllib.parse import urljoin, urlparse
+    from xml.etree import ElementTree
+    import re
+
+    browser = None
+    try:
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(headless=True)
+            context = await browser.new_context(
+                viewport={"width": 1440, "height": 1000},
+                locale="en-GB",
+                ignore_https_errors=False,
+            )
+            page = await context.new_page()
+            page.set_default_navigation_timeout(_DISCOVERY_TIMEOUT_MS)
+            response = await page.goto(url, wait_until="domcontentloaded")
+            await page.wait_for_timeout(1200)
+
+            final_url = page.url
+            if not _is_public_target(final_url):
+                raise HTTPException(status_code=400, detail="The website redirected to a non-public address.")
+
+            page_data = await page.evaluate("""() => {
+              const text = (el) => (el?.innerText || el?.textContent || '').trim().replace(/\\s+/g, ' ');
+              const anchors = Array.from(document.querySelectorAll('a[href]')).slice(0, 500).map(a => ({
+                href: a.getAttribute('href'),
+                label: text(a).slice(0, 180),
+                aria: (a.getAttribute('aria-label') || '').slice(0, 180)
+              }));
+              const jsonLd = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
+                .map(s => s.textContent || '').join(' ').slice(0, 12000);
+              const productNodes = Array.from(document.querySelectorAll(
+                '[itemtype*="Product"], [data-product-id], [data-testid*="product"], .product, .product-item, .product-card, li.product'
+              )).slice(0, 30);
+              return {
+                title: document.title || '',
+                description: document.querySelector('meta[name="description"]')?.content || '',
+                canonical: document.querySelector('link[rel="canonical"]')?.href || location.href,
+                links: anchors,
+                jsonLd,
+                productNodeCount: productNodes.length,
+                headings: Array.from(document.querySelectorAll('h1,h2')).slice(0, 30).map(text),
+                platformSignals: {
+                  shopify: /cdn\\.shopify\\.com|Shopify\\.theme|shopify-section/i.test(document.documentElement.innerHTML),
+                  woocommerce: /woocommerce|wc-block/i.test(document.documentElement.innerHTML),
+                  magento: /Magento_|mage\\//i.test(document.documentElement.innerHTML),
+                  bigcommerce: /bigcommerce|stencil-utils/i.test(document.documentElement.innerHTML),
+                  prestashop: /prestashop/i.test(document.documentElement.innerHTML)
+                }
+              };
+            }""")
+
+            links = []
+            seen = set()
+            for item in page_data.get("links", []):
+                candidate = _normalise_discovery_url(item.get("href"), final_url)
+                if not candidate or candidate in seen:
+                    continue
+                seen.add(candidate)
+                links.append({**item, "url": candidate})
+
+            category_items = []
+            product_candidates = []
+            category_pattern = re.compile(r"/(category|categories|collection|collections|department|departments|c)/", re.I)
+            product_pattern = re.compile(r"/(product|products|p|item|dp)/", re.I)
+            excluded = re.compile(r"/(account|login|cart|checkout|search|blog|news|contact|about)(/|$)", re.I)
+            for item in links:
+                parsed_path = urlparse(item["url"]).path
+                label = item.get("label") or item.get("aria") or parsed_path.rstrip("/").split("/")[-1].replace("-", " ").replace("_", " ").title()
+                if excluded.search(parsed_path):
+                    continue
+                if category_pattern.search(parsed_path) or any(word in label.lower() for word in ("shop all", "all products", "accessories", "clothing", "bikes", "bicycles", "components")):
+                    category_items.append({
+                        "name": label[:120],
+                        "url": item["url"],
+                        "depth": max(1, len([part for part in parsed_path.split("/") if part])),
+                    })
+                elif product_pattern.search(parsed_path):
+                    product_candidates.append(item["url"])
+
+            sitemap_urls = []
+            sitemap_status = "not_found"
+            sitemap_candidates = [urljoin(final_url, "/robots.txt"), urljoin(final_url, "/sitemap.xml")]
+            for sitemap_url in sitemap_candidates:
+                try:
+                    sitemap_response = await context.request.get(sitemap_url, timeout=7000)
+                    if not sitemap_response.ok:
+                        continue
+                    body = await sitemap_response.text()
+                    if sitemap_url.endswith("robots.txt"):
+                        sitemap_locations = re.findall(r"(?im)^sitemap:\\s*(https?://\\S+)", body)
+                        sitemap_candidates.extend(sitemap_locations[:5])
+                        continue
+                    root = ElementTree.fromstring(body[:2_000_000])
+                    locs = [node.text.strip() for node in root.iter() if node.tag.lower().endswith("}loc") and node.text]
+                    sitemap_urls.extend(locs[:200])
+                    sitemap_status = "found"
+                except Exception:
+                    continue
+
+            # Sitemap URL patterns often expose category and product routes.
+            for sitemap_url in sitemap_urls:
+                if urlparse(sitemap_url).hostname != urlparse(final_url).hostname:
+                    continue
+                path = urlparse(sitemap_url).path
+                if category_pattern.search(path) and len(category_items) < _DISCOVERY_MAX_CATEGORIES:
+                    category_items.append({
+                        "name": path.rstrip("/").split("/")[-1].replace("-", " ").title(),
+                        "url": sitemap_url,
+                        "depth": max(1, len([part for part in path.split("/") if part])),
+                        "source": "sitemap",
+                    })
+                elif product_pattern.search(path):
+                    product_candidates.append(sitemap_url)
+
+            unique_categories = []
+            category_seen = set()
+            for item in category_items:
+                if item["url"] not in category_seen:
+                    category_seen.add(item["url"])
+                    unique_categories.append(item)
+                if len(unique_categories) >= _DISCOVERY_MAX_CATEGORIES:
+                    break
+
+            unique_products = list(dict.fromkeys(product_candidates))[:100]
+            detector = PatternDetector()
+            domain_detection = detector.detect_by_domain(final_url)
+            platform_signals = page_data.get("platformSignals", {})
+            detected_platform = domain_detection.get("platform") or next(
+                (name for name, found in platform_signals.items() if found), "unknown"
+            )
+
+            return {
+                "success": True,
+                "requested_url": url,
+                "final_url": final_url,
+                "http_status": response.status if response else None,
+                "title": page_data.get("title", ""),
+                "description": page_data.get("description", ""),
+                "platform": detected_platform,
+                "platform_signals": platform_signals,
+                "discovery": {
+                    "categories": unique_categories,
+                    "category_count": len(unique_categories),
+                    "product_url_samples": unique_products[:30],
+                    "product_url_count_estimate": len(unique_products),
+                    "product_dom_nodes_on_landing_page": page_data.get("productNodeCount", 0),
+                    "sitemap_status": sitemap_status,
+                    "sitemap_url_count": len(sitemap_urls),
+                    "headings": page_data.get("headings", []),
+                    "truncated": len(links) >= _DISCOVERY_MAX_LINKS,
+                },
+                "limitations": [
+                    "Counts are discovery samples, not a guaranteed total catalogue size.",
+                    "Category hierarchy is inferred from navigation and sitemap URL patterns.",
+                    "Some stores expose categories or products only after interaction or authentication.",
+                ],
+            }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Website discovery failed for %s", url)
+        raise HTTPException(status_code=502, detail=f"Website analysis failed: {str(exc)[:300]}")
+    finally:
+        if browser:
+            await browser.close()
+
+
+@router.post("/preview", response_model=DetectedSelectors)
 # async def preview_scraping(request: ScraperPreviewRequest):
 #     """
 #     Preview scraping for a URL.
