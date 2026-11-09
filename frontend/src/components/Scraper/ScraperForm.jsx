@@ -7,7 +7,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from '@heroicons/react/24/outline'
-import { cn, isValidUrl } from '@/utils/helpers'
+import { isValidUrl } from '@/utils/helpers'
 import {
   Card,
   CardHeader,
@@ -15,7 +15,6 @@ import {
   Button,
   Input,
   Select,
-  Alert,
 } from '@/components/Common'
 import scraperService from '@/services/scraperService'
 import toast from 'react-hot-toast'
@@ -217,7 +216,7 @@ export function ScraperForm() {
                 label="Max Pages"
                 type="number"
                 value={config.max_pages}
-                onChange={(e) => handleConfigChange('max_pages', parseInt(e.target.value))}
+                onChange={(e) => handleConfigChange('max_pages', Math.max(1, Number(e.target.value) || 1))}
                 min={1}
                 max={10000}
               />
@@ -226,7 +225,7 @@ export function ScraperForm() {
                 label="Max Products"
                 type="number"
                 value={config.max_products}
-                onChange={(e) => handleConfigChange('max_products', parseInt(e.target.value))}
+                onChange={(e) => handleConfigChange('max_products', Math.max(1, Number(e.target.value) || 1))}
                 min={1}
                 max={100000}
               />
@@ -299,7 +298,7 @@ export function ScraperForm() {
                   label="Request Delay (ms)"
                   type="number"
                   value={config.request_delay}
-                  onChange={(e) => handleConfigChange('request_delay', parseInt(e.target.value))}
+                  onChange={(e) => handleConfigChange('request_delay', Math.max(0, Number(e.target.value) || 0))}
                   hint="Delay between requests to avoid rate limiting"
                   min={0}
                   max={30000}
@@ -323,6 +322,7 @@ export function ScraperForm() {
         {/* Start Button */}
         <Button
           onClick={handleStartScraping}
+          disabled={!isValidUrl(url) || startScrapingMutation.isPending}
           loading={startScrapingMutation.isPending}
           icon={PlayIcon}
           size="lg"
