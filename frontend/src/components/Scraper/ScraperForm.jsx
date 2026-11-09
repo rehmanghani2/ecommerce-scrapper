@@ -7,7 +7,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
 } from '@heroicons/react/24/outline'
-import { cn } from '@/utils/helpers'
+import { cn, isValidUrl } from '@/utils/helpers'
 import {
   Card,
   CardHeader,
@@ -90,7 +90,6 @@ export function ScraperForm() {
       if (data.success && data.products) {
         setPreviewData({
           platform: 'AI Zero-Shot (Gemini)',
-          confidence: 0.95,
           sample_products: data.products.map((p) => ({
             name: p.name,
             price: p.price != null ? `${p.currency || '$'}${p.price}` : null,
@@ -148,9 +147,23 @@ export function ScraperForm() {
     setConfig((prev) => ({ ...prev, [key]: value }))
   }
 
+  const handleUrlChange = (nextUrl) => {
+    setUrl(nextUrl)
+    setPreviewData(null)
+    setTestResults({})
+  }
+
+  const handleAnalyze = () => {
+    if (!isValidUrl(url)) {
+      toast.error('Enter a valid website URL, including https://')
+      return
+    }
+    analyzeMutation.mutate()
+  }
+
   const handleStartScraping = () => {
-    if (!url) {
-      toast.error('Please enter a URL')
+    if (!isValidUrl(url)) {
+      toast.error('Enter a valid website URL before starting a scrape')
       return
     }
     startScrapingMutation.mutate()
@@ -168,8 +181,8 @@ export function ScraperForm() {
           
           <UrlInput
             value={url}
-            onChange={setUrl}
-            onAnalyze={() => analyzeMutation.mutate()}
+            onChange={handleUrlChange}
+            onAnalyze={handleAnalyze}
             onAIExtract={() => aiExtractMutation.mutate()}
             aiExtractLoading={aiExtractMutation.isPending}
             onOpenVisualPicker={() => setVisualPickerOpen(true)}
