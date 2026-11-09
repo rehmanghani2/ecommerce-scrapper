@@ -1273,6 +1273,16 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
 
             use_pw = bool(config and getattr(config, 'javascript_rendering', False))
             domain_lower = url.lower()
+            selected_category_urls = list(dict.fromkeys(getattr(config, "category_urls", None) or [])) if config else []
+            if selected_category_urls:
+                root_host = (urlparse(url).hostname or "").lower()
+                for category_url in selected_category_urls:
+                    parsed_category = urlparse(category_url)
+                    if parsed_category.scheme not in ("http", "https") or (parsed_category.hostname or "").lower() != root_host:
+                        raise ValueError("Selected category URLs must belong to the original website.")
+                await write_log(f"Starting from {len(selected_category_urls)} selected category URLs.", "info")
+            else:
+                selected_category_urls = [url]
             if any(m in domain_lower for m in ("amazon.", "ebay.", "walmart.", "etsy.", "wix.")) or detected_platform in ("amazon", "ebay", "walmart", "etsy", "wix"):
                 use_pw = True
 
@@ -1281,6 +1291,7 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                 scraper = PlaywrightScraper(
                     job_id=job_id,
                     start_url=url,
+                    start_urls=selected_category_urls,
                     max_pages=max_pages,
                     max_products=max_products,
                     max_depth=max_depth,
