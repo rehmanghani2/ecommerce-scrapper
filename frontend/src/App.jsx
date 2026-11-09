@@ -19,6 +19,7 @@ const Proxies = lazy(() => import('./pages/Proxies'))
 const Reports = lazy(() => import('./pages/Reports'))
 const SerpTracking = lazy(() => import('./pages/SerpTracking'))
 const Settings = lazy(() => import('./pages/Settings'))
+const Notifications = lazy(() => import('./pages/Notifications'))
 const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -172,6 +173,7 @@ function App() {
           <Route path="proxies" element={<Proxies />} />
           <Route path="reports" element={<Reports />} />
           <Route path="serp" element={<SerpTracking />} />
+          <Route path="notifications" element={<Notifications />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 
