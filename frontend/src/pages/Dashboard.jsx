@@ -16,7 +16,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { useJobStats, useJobs } from '@/hooks/useJobs'
-import { cn, formatNumber, formatRelativeTime } from '@/utils/helpers'
+import { cn, formatRelativeTime } from '@/utils/helpers'
 import { Button, Card, CardHeader, CardTitle } from '@/components/Common'
 import { StatsOverview, RecentJobs, ActivityChart, JobsStatusChart } from '@/components/Dashboard'
 
@@ -206,24 +206,15 @@ export default function Dashboard() {
             </CardHeader>
 
             <div className="space-y-3.5">
+              <QuickStat label="Completed Jobs" value={stats?.completed_jobs ?? 0} />
+              <QuickStat label="Failed Jobs" value={stats?.failed_jobs ?? 0} />
+              <QuickStat label="Running Jobs" value={stats?.running_jobs ?? 0} />
               <QuickStat
-                label="Avg. Products per Job"
-                value={
-                  stats?.total_jobs > 0
-                    ? Math.round((stats?.total_products || 0) / stats.total_jobs)
-                    : 0
-                }
+                label="Average Duration"
+                value={stats?.average_duration
+                  ? `${Math.max(1, Math.round(stats.average_duration / 60))} min`
+                  : '—'}
               />
-              <QuickStat
-                label="Avg. Job Duration"
-                value={
-                  stats?.average_duration
-                    ? `${Math.max(1, Math.round(stats.average_duration / 60))} min`
-                    : '—'
-                }
-              />
-              <QuickStat label="Total Domains Scraped" value={stats?.unique_domains || 0} />
-              <QuickStat label="Jobs This Week" value={stats?.jobs_this_week || 0} />
             </div>
           </Card>
 
