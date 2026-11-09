@@ -133,16 +133,50 @@ function LogEntry({ log }) {
         {levelConfig.label}
       </span>
       
-      <span
-        className={cn(
-          'flex-1 break-all',
-          log.level === 'error' && 'text-danger-600 dark:text-danger-400',
-          log.level === 'warning' && 'text-warning-600 dark:text-warning-400',
-          log.level === 'debug' && 'text-gray-500 dark:text-gray-400'
+      <div className="flex-1 min-w-0">
+        <p
+          className={cn(
+            'break-all',
+            log.level === 'error' && 'text-danger-600 dark:text-danger-400',
+            log.level === 'warning' && 'text-warning-600 dark:text-warning-400',
+            log.level === 'debug' && 'text-gray-500 dark:text-gray-400'
+          )}
+        >
+          {log.message}
+        </p>
+        {log.event === 'access_challenge' && log.challenge && (
+          <div className="mt-2 rounded-lg border border-amber-300/70 dark:border-amber-700/70 bg-amber-50/70 dark:bg-amber-950/20 px-3 py-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-amber-800 dark:text-amber-300">
+                Access challenge: {log.challenge.provider || 'unknown provider'}
+              </span>
+              {typeof log.challenge.confidence === 'number' && (
+                <span className="text-amber-700 dark:text-amber-400">
+                  Confidence {(log.challenge.confidence * 100).toFixed(0)}%
+                </span>
+              )}
+              {log.challenge.http_status && (
+                <span className="text-amber-700 dark:text-amber-400">
+                  HTTP {log.challenge.http_status}
+                </span>
+              )}
+            </div>
+            {log.challenge.signals?.length > 0 && (
+              <p className="mt-1 text-amber-700 dark:text-amber-400 break-all">
+                Signals: {log.challenge.signals.join(', ')}
+              </p>
+            )}
+            {log.challenge.url && (
+              <p className="mt-1 text-gray-600 dark:text-gray-400 break-all">
+                URL: {log.challenge.url}
+              </p>
+            )}
+            <p className="mt-1 text-amber-800 dark:text-amber-300">
+              Crawl stopped for this site. No CAPTCHA was solved or bypassed.
+            </p>
+          </div>
         )}
-      >
-        {log.message}
-      </span>
+      </div>
     </div>
   )
 }

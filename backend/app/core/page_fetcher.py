@@ -1,30 +1,20 @@
 """
-page_fetcher.py
-----------------
-Responsible for fetching pages using Playwright in a controlled, reusable,
-and fault-tolerant way.
+Playwright page fetching with conservative CAPTCHA / anti-bot challenge detection.
 
-This module does NOT extract data. It only:
-- Opens pages
-- Applies navigation rules
-- Returns HTML / Playwright page object
-
-This design allows us to safely test 200+ ecommerce websites.
+This module detects access challenges only. It never solves or bypasses them.
 """
-
-from typing import Optional, Dict
+from typing import Any, Dict, Optional
 
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
+from app.core.challenge_detector import detect_challenge
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 class PageFetchResult:
-    """
-    Standardized result object returned by PageFetcher
-    """
+    """Standardized result returned by PageFetcher."""
 
     def __init__(
         self,
@@ -33,23 +23,18 @@ class PageFetchResult:
         status: Optional[int] = None,
         html: Optional[str] = None,
         error: Optional[str] = None,
+        challenge: Optional[Dict[str, Any]] = None,
     ):
         self.success = success
         self.url = url
         self.status = status
         self.html = html
         self.error = error
+        self.challenge = challenge
 
 
 class PageFetcher:
-    """
-    PageFetcher encapsulates all browser interaction logic.
-
-    WHY THIS EXISTS:
-    - Centralizes Playwright usage
-    - Avoids duplicated browser code
-    - Makes retries, timeouts, and headers consistent
-    """
+    """Centralizes Playwright navigation, response handling, and challenge checks."""
 
     def __init__(
         self,
@@ -66,16 +51,35 @@ class PageFetcher:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
 
+    async def _challenge_result(
+        self, url: str, status: Optional[int], html: Optional[str]
+    ) -> Optional[PageFetchResult]:
+        challenge = detect_challenge(url, status, html)
+        if not challenge:
+            return None
+
+        logger.warning(
+            "Access challenge detected: provider=%s url=%s",
+            challenge["provider"],
+            url,
+        )
+        return PageFetchResult(
+            success=False,
+            url=url,
+            status=status,
+            error="Access challenge detected; page was not processed",
+            challenge=challenge,
+        )
+
     async def fetch(self, url: str) -> PageFetchResult:
         """
         Navigate to a URL and return page content.
 
-        This method NEVER raises exceptions upward.
-        All failures are captured and returned safely.
+        Failures are returned as PageFetchResult objects. A detected challenge is
+        surfaced separately so the scheduler can log it and stop issuing requests.
         """
-
         try:
-            logger.info(f"Fetching URL: {url}")
+            logger.info("Fetching URL: %s", url)
 
             if self.extra_headers:
                 await self.page.set_extra_http_headers(self.extra_headers)
@@ -86,6 +90,13 @@ class PageFetcher:
                 wait_until=self.wait_until,
             )
 
+            status = response.status if response is not None else None
+            html = await self.page.content()
+
+            challenge_result = await self._challenge_result(url, status, html)
+            if challenge_result:
+                return challenge_result
+
             if response is None:
                 return PageFetchResult(
                     success=False,
@@ -93,17 +104,13 @@ class PageFetcher:
                     error="No response returned from page.goto",
                 )
 
-            status = response.status
-
-            if status >= 400:
+            if status is not None and status >= 400:
                 return PageFetchResult(
                     success=False,
                     url=url,
                     status=status,
                     error=f"HTTP error {status}",
                 )
-
-            html = await self.page.content()
 
             return PageFetchResult(
                 success=True,
@@ -113,7 +120,16 @@ class PageFetcher:
             )
 
         except PlaywrightTimeoutError:
-            logger.warning(f"Timeout while fetching: {url}")
+            logger.warning("Timeout while fetching: %s", url)
+            # Some challenge pages render before the navigation wait times out.
+            try:
+                html = await self.page.content()
+                challenge_result = await self._challenge_result(url, None, html)
+                if challenge_result:
+                    return challenge_result
+            except Exception:
+                pass
+
             return PageFetchResult(
                 success=False,
                 url=url,
@@ -121,7 +137,7 @@ class PageFetcher:
             )
 
         except Exception as exc:
-            logger.exception(f"Unexpected error while fetching {url}")
+            logger.exception("Unexpected error while fetching %s", url)
             return PageFetchResult(
                 success=False,
                 url=url,
@@ -129,9 +145,7 @@ class PageFetcher:
             )
 
     async def close(self):
-        """
-        Close page explicitly if scheduler owns lifecycle.
-        """
+        """Close page explicitly if scheduler owns lifecycle."""
         try:
             await self.page.close()
         except Exception:

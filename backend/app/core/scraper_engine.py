@@ -77,15 +77,30 @@ class ScraperEngine:
         try:
             await self._run()
             from app.models.job import JobStatus
-            await self._job_service.update_job_status(self.job_id, JobStatus.COMPLETED)
-            await self._notifier.publish(
-                f"job:{self.job_id}",
-                {
-                    "event": "job_completed",
-                    "status": "completed"
-                }
-            )
-            logger.info(f"[Job {self.job_id}] Completed successfully")
+            if self._scheduler and self._scheduler.challenge_detected:
+                reason = "Access challenge detected. Crawl stopped; review the job logs before retrying."
+                await self._job_service.update_job_status(
+                    self.job_id, JobStatus.FAILED, reason
+                )
+                await self._notifier.publish(
+                    f"job:{self.job_id}",
+                    {
+                        "event": "job_blocked",
+                        "status": "failed",
+                        "reason": reason,
+                    }
+                )
+                logger.warning("[Job %s] %s", self.job_id, reason)
+            else:
+                await self._job_service.update_job_status(self.job_id, JobStatus.COMPLETED)
+                await self._notifier.publish(
+                    f"job:{self.job_id}",
+                    {
+                        "event": "job_completed",
+                        "status": "completed"
+                    }
+                )
+                logger.info(f"[Job {self.job_id}] Completed successfully")
         except Exception as exc:
             import traceback
             error_trace = traceback.format_exc()
@@ -145,6 +160,7 @@ class ScraperEngine:
             product_extractor=product_extractor,
             on_page_crawled=self._on_page_crawled,
             on_products_found=self._on_products_found,
+            on_challenge=self._on_challenge_detected,
         )
         logger.info(f"[Job {self.job_id}] Step 6: CrawlScheduler created, starting run...")
 
@@ -198,6 +214,47 @@ class ScraperEngine:
                     "count": saved_count
                 }
             )
+
+    async def _on_challenge_detected(self, url: str, challenge: Dict[str, Any]):
+        """
+        Persist and broadcast an access-challenge event for this crawl job.
+
+        Challenge events are kept in the existing JSON job log so this feature
+        does not require a database migration or a separate event table.
+        """
+        from datetime import datetime
+        from app.models.job import Job
+
+        provider = challenge.get("provider", "unknown")
+        confidence = challenge.get("confidence", 0)
+        message = (
+            f"Access challenge detected ({provider}, confidence={confidence:.2f}). "
+            "Crawl stopped to avoid repeated requests; no challenge solving or bypass was attempted."
+        )
+        job = await self.db.get(Job, self.job_id)
+        if job:
+            logs = list(job.logs or [])
+            logs.append({
+                "timestamp": datetime.utcnow().isoformat(),
+                "level": "warning",
+                "message": message,
+                "event": "access_challenge",
+                "challenge": challenge,
+            })
+            job.logs = logs[-1000:]
+            await self.db.commit()
+
+        logger.warning("[Job %s] %s | %s", self.job_id, message, url)
+        await self._notifier.publish(
+            f"job:{self.job_id}",
+            {
+                "event": "access_challenge",
+                "status": "blocked",
+                "url": url,
+                "challenge": challenge,
+                "message": message,
+            }
+        )
 
     async def _on_page_crawled(self, url: str, success: bool):
         """
