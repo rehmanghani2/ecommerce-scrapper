@@ -56,6 +56,7 @@ export function ScraperForm() {
   // Preview state
   const [previewData, setPreviewData] = useState(null)
   const [testResults, setTestResults] = useState({})
+  const [selectedCategoryUrls, setSelectedCategoryUrls] = useState([])
 
   // Mutations
   const analyzeMutation = useMutation({
@@ -70,6 +71,8 @@ export function ScraperForm() {
     },
     onSuccess: (data) => {
       setPreviewData(data)
+      const discovered = data.discovery?.categories || []
+      setSelectedCategoryUrls(discovered.map((item) => item.url))
       if (data.selectors && Object.keys(data.selectors).length) {
         setCustomSelectors(data.selectors)
       }
@@ -138,6 +141,7 @@ export function ScraperForm() {
   const startScrapingMutation = useMutation({
     mutationFn: () => scraperService.startScraping(url, jobName, {
       ...config,
+      category_urls: selectedCategoryUrls.length ? selectedCategoryUrls : undefined,
       platform: platform !== 'auto' ? platform : undefined,
       selectors: Object.keys(customSelectors).length > 0 ? customSelectors : undefined,
     }),
@@ -158,6 +162,7 @@ export function ScraperForm() {
     setUrl(nextUrl)
     setPreviewData(null)
     setTestResults({})
+    setSelectedCategoryUrls([])
   }
 
   const handleAnalyze = () => {
@@ -345,6 +350,8 @@ export function ScraperForm() {
       <div>
         <PreviewPanel
           data={previewData}
+          selectedCategoryUrls={selectedCategoryUrls}
+          onSelectedCategoryUrlsChange={setSelectedCategoryUrls}
           loading={analyzeMutation.isPending || aiExtractMutation.isPending}
           error={analyzeMutation.error?.message || aiExtractMutation.error?.message}
         />
