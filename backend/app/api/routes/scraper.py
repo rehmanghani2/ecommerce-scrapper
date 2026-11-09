@@ -1305,6 +1305,7 @@ async def run_scraper_job(job_id: int, url: str, config: Optional[ScraperConfig]
                 scraper = HttpxScraper(
                     job_id=job_id,
                     start_url=url,
+                    start_urls=selected_category_urls,
                     max_pages=max_pages,
                     max_products=max_products,
                     max_depth=max_depth,
