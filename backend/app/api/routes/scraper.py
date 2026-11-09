@@ -99,23 +99,49 @@ _DISCOVERY_TIMEOUT_MS = 25000
 
 
 def _is_public_target(url: str) -> bool:
-    """Reject non-HTTP and private/local targets before opening a browser."""
+    """Allow only HTTP(S) targets whose resolved addresses are globally routable."""
     import ipaddress
     import socket
 
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        return False
-    host = parsed.hostname.lower().strip(".")
-    if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
-        return False
     try:
-        addresses = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return False
+        if parsed.username or parsed.password:
+            return False
+        host = parsed.hostname.lower().strip(".")
+        if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
+            return False
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
         return bool(addresses) and all(
             ipaddress.ip_address(item[4][0]).is_global for item in addresses
         )
-    except (OSError, ValueError):
+    except (OSError, ValueError, TypeError, OverflowError):
         return False
+
+
+def _is_safe_network_request(url: str) -> bool:
+    """Permit browser-local schemes, but validate every HTTP(S) request target."""
+    parsed = urlparse(url)
+    return _is_public_target(url) if parsed.scheme in ("http", "https") else True
+
+
+def _is_pagination_candidate(url: str, label: str = "", rel: str = "") -> bool:
+    """Recognise common path, query-string, rel=next and labelled pagination links."""
+    import re
+    from urllib.parse import parse_qs
+
+    parsed = urlparse(url)
+    query_keys = {key.lower() for key in parse_qs(parsed.query).keys()}
+    pagination_keys = {"page", "p", "pageno", "pagenum", "page_number", "offset", "start"}
+    if query_keys & pagination_keys:
+        return True
+    if re.search(r"/page/\d+(?:/|$)", parsed.path, re.I):
+        return True
+    return rel.strip().lower() == "next" or bool(
+        re.search(r"\b(next|next page|older products)\b", label, re.I)
+    )
 
 
 def _normalise_discovery_url(href: str, base_url: str) -> Optional[str]:
@@ -158,6 +184,17 @@ async def discover_website(payload: Dict[str, Any]):
                 locale="en-GB",
                 ignore_https_errors=False,
             )
+
+            async def guard_discovery_request(route):
+                request_url = route.request.url
+                if not _is_safe_network_request(request_url):
+                    logger.warning("Blocked non-public discovery request: %s", request_url)
+                    await route.abort("blockedbyclient")
+                    return
+                await route.continue_()
+
+            # Validate browser subrequests and redirects, not only the first URL.
+            await context.route("**/*", guard_discovery_request)
             page = await context.new_page()
             page.set_default_navigation_timeout(_DISCOVERY_TIMEOUT_MS)
             response = await page.goto(url, wait_until="domcontentloaded")
@@ -230,6 +267,8 @@ async def discover_website(payload: Dict[str, Any]):
             sitemap_candidates = [urljoin(final_url, "/robots.txt"), urljoin(final_url, "/sitemap.xml")]
             for sitemap_url in sitemap_candidates:
                 try:
+                    if not _is_public_target(sitemap_url):
+                        continue
                     sitemap_response = await context.request.get(sitemap_url, timeout=7000)
                     if not sitemap_response.ok:
                         continue
@@ -300,7 +339,7 @@ async def discover_website(payload: Dict[str, Any]):
                             continue
                         await crawl_page.wait_for_timeout(350)
                         page_links = await crawl_page.locator("a[href]").evaluate_all(
-                            "(els) => els.slice(0, 600).map(a => ({href:a.getAttribute('href'), label:(a.innerText || a.getAttribute('aria-label') || '').trim().replace(/\s+/g,' ').slice(0,180)}))"
+                            "(els) => els.slice(0, 600).map(a => ({href:a.getAttribute('href'), label:(a.innerText || '').trim().replace(/\s+/g,' ').slice(0,180), aria:(a.getAttribute('aria-label') || '').slice(0,180), rel:a.getAttribute('rel') || ''}))"
                         )
                         next_page_urls = []
                         for link in page_links:
@@ -322,7 +361,11 @@ async def discover_website(payload: Dict[str, Any]):
                                 }
                                 category_by_url[candidate] = child
                                 category_queue.append((candidate, depth + 1, category_url))
-                            elif any(token in path.lower() for token in ("page=", "p=", "/page/")) or "next" in label.lower():
+                            elif _is_pagination_candidate(
+                                candidate,
+                                link.get("label") or link.get("aria") or label,
+                                link.get("rel") or "",
+                            ):
                                 next_page_urls.append(candidate)
 
                         # Product cards can use opaque URLs without /product/ in their path.
@@ -338,11 +381,11 @@ async def discover_website(payload: Dict[str, Any]):
                         for next_url in list(dict.fromkeys(next_page_urls))[:max_listing_pages_per_category - 1]:
                             if next_url in listing_pages:
                                 continue
-                            listing_pages.add(next_url)
                             try:
                                 next_response = await crawl_page.goto(next_url, wait_until="domcontentloaded", timeout=_DISCOVERY_TIMEOUT_MS)
                                 if not next_response or next_response.status >= 400:
                                     continue
+                                listing_pages.add(next_url)
                                 pagination_pages += 1
                                 page_product_links = await crawl_page.locator(
                                     "a[href*='/product/'], a[href*='/products/'], article a[href], [class*='product'] a[href], [data-testid*='product'] a[href]"
