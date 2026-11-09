@@ -60,6 +60,8 @@ export function UrlInput({
         
         {value && (
           <button
+            type="button"
+            aria-label="Clear website URL"
             onClick={handleClear}
             className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
@@ -107,6 +109,12 @@ export function UrlInput({
         <p className="mt-2 text-sm text-danger-600 dark:text-danger-400">{error}</p>
       )}
       
+      {!domain && !error && (
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          Enter a full URL beginning with https:// or http://. Analysis checks platform patterns and available product selectors.
+        </p>
+      )}
+
       {domain && !error && (
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
           Target: <span className="font-medium text-gray-700 dark:text-gray-300">{domain}</span>
