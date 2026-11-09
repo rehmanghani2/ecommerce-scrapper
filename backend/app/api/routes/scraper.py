@@ -235,7 +235,7 @@ async def discover_website(payload: Dict[str, Any]):
                         continue
                     body = await sitemap_response.text()
                     if sitemap_url.endswith("robots.txt"):
-                        sitemap_locations = re.findall(r"(?im)^sitemap:\s*(https?://\\S+)", body)
+                        sitemap_locations = re.findall(r"(?im)^sitemap:\s*(https?://\S+)", body)
                         sitemap_candidates.extend(sitemap_locations[:5])
                         continue
                     root = ElementTree.fromstring(body[:2_000_000])
