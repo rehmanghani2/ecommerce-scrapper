@@ -77,15 +77,30 @@ class ScraperEngine:
         try:
             await self._run()
             from app.models.job import JobStatus
-            await self._job_service.update_job_status(self.job_id, JobStatus.COMPLETED)
-            await self._notifier.publish(
-                f"job:{self.job_id}",
-                {
-                    "event": "job_completed",
-                    "status": "completed"
-                }
-            )
-            logger.info(f"[Job {self.job_id}] Completed successfully")
+            if self._scheduler and self._scheduler.challenge_detected:
+                reason = "Access challenge detected. Crawl stopped; review the job logs before retrying."
+                await self._job_service.update_job_status(
+                    self.job_id, JobStatus.FAILED, reason
+                )
+                await self._notifier.publish(
+                    f"job:{self.job_id}",
+                    {
+                        "event": "job_blocked",
+                        "status": "failed",
+                        "reason": reason,
+                    }
+                )
+                logger.warning("[Job %s] %s", self.job_id, reason)
+            else:
+                await self._job_service.update_job_status(self.job_id, JobStatus.COMPLETED)
+                await self._notifier.publish(
+                    f"job:{self.job_id}",
+                    {
+                        "event": "job_completed",
+                        "status": "completed"
+                    }
+                )
+                logger.info(f"[Job {self.job_id}] Completed successfully")
         except Exception as exc:
             import traceback
             error_trace = traceback.format_exc()
