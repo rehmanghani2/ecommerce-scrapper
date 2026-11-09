@@ -20,26 +20,26 @@ import { cn } from '@/utils/helpers'
 
 const navigationGroups = [
   {
-    title: 'Core Workflow',
+    title: 'Workspace',
     items: [
       { name: 'Dashboard', href: '/', icon: HomeIcon },
-      { name: 'Web Scraper', href: '/scraper', icon: GlobeAltIcon, badge: 'Engine' },
+      { name: 'New Scrape', href: '/scraper', icon: GlobeAltIcon },
       { name: 'Scraping Jobs', href: '/jobs', icon: BriefcaseIcon },
       { name: 'Product Catalog', href: '/products', icon: CubeIcon, badge: 'AI' },
     ],
   },
   {
-    title: 'Intelligence & Analytics',
+    title: 'Analytics',
     items: [
       { name: 'Search Rankings', href: '/serp', icon: MagnifyingGlassIcon, badge: 'SERP' },
-      { name: 'Executive Reports', href: '/reports', icon: DocumentChartBarIcon, badge: 'PDF' },
+      { name: 'Reports', href: '/reports', icon: DocumentChartBarIcon },
     ],
   },
   {
-    title: 'Automation & Ops',
+    title: 'Automation',
     items: [
-      { name: 'Cron Schedules', href: '/schedules', icon: ClockIcon },
-      { name: 'Proxy Pool Health', href: '/proxies', icon: ServerStackIcon },
+      { name: 'Schedules', href: '/schedules', icon: ClockIcon },
+      { name: 'Proxy Management', href: '/proxies', icon: ServerStackIcon },
       { name: 'Data Exports', href: '/exports', icon: ArrowDownTrayIcon },
     ],
   },
@@ -53,7 +53,7 @@ export function Sidebar({ collapsed, onToggle }) {
     ...(user?.is_superuser
       ? [{ name: 'Admin Portal', href: '/admin/dashboard', icon: ShieldCheckIcon, badge: 'Root' }]
       : []),
-    { name: 'Settings & Sync', href: '/settings', icon: Cog6ToothIcon },
+    { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
   ]
 
   const NavItem = ({ item }) => {
@@ -123,7 +123,7 @@ export function Sidebar({ collapsed, onToggle }) {
                 CommerceIntel
               </span>
               <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500">
-                AI Scraper & Pricing Suite
+                E-commerce Data Platform
               </span>
             </div>
           )}
