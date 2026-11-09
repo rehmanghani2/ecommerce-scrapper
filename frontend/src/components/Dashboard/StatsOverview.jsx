@@ -9,7 +9,7 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline'
-import { cn, formatNumber, formatPercent } from '@/utils/helpers'
+import { formatNumber, formatPercent } from '@/utils/helpers'
 import { StatCard } from '@/components/Common'
 import { useJobStats } from '@/hooks/useJobs'
 
