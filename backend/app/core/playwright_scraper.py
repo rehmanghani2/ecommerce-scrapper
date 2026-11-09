@@ -121,10 +121,14 @@ class PlaywrightScraper:
                             kw["args"] = launch_args
                         if proxy_node:
                             kw["proxy"] = proxy_node.to_playwright_proxy()
-                            _sync_log(f"  ↳ Using proxy: {proxy_node.masked()} [{engine_name}]")
+                            _sync_log(f"  ↳ Using proxy: {proxy_node.safe_log_label()} [{engine_name}]")
                         elif self.proxy:
                             kw["proxy"] = self.proxy
-                            _sync_log(f"  ↳ Using proxy server: {self.proxy.get('server', self.proxy)}")
+                            proxy_server = self.proxy.get('server', str(self.proxy)) if isinstance(self.proxy, dict) else str(self.proxy)
+                            # Mask IP and credentials
+                            import re
+                            masked_srv = re.sub(r'https?://(?:[^@]+@)?', 'Proxy(', proxy_server) + ")"
+                            _sync_log(f"  ↳ Using configured proxy: {masked_srv}")
                         else:
                             _sync_log(f"  ↳ Direct connection (no proxy) [{engine_name}]")
                         
@@ -278,14 +282,22 @@ class PlaywrightScraper:
                 import traceback
                 err = traceback.format_exc()
                 logger.error(f"[Job {self.job_id}] Playwright Initialization Error: {err}")
-                return {"error": err}
+                
+                # Sanitize error message: extract concise error and strip internal proxy/credentials
+                import re
+                short_err = str(e).split("\n")[0]
+                if "TargetClosedError" in short_err or "Target page" in short_err:
+                    clean_msg = "Browser closed unexpectedly or missing system dependencies."
+                else:
+                    clean_msg = re.sub(r'https?://[^\s,]+', '[PROXY_REDACTED]', short_err)
+                return {"error": clean_msg, "full_error": err}
 
         # Run the entire crawl inside the thread pool using thread-safe loggers
         result = await asyncio.to_thread(_scrape_sync)
         
         pages_count = 0
         if isinstance(result, dict) and "error" in result:
-            await self._log(f"Playwright crashed: {result['error']}", "error")
+            await self._log(f"Playwright initialization failed ({result['error']})", "error")
             await self._log("Falling back to HTTPX/BeautifulSoup Scraper...", "warning")
             from app.core.httpx_scraper import HttpxScraper
             

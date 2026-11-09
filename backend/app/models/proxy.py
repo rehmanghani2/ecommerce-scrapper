@@ -75,6 +75,19 @@ class ProxyRecord(Base):
             return f"{self.protocol}://{self.username}:****@{self.server}"
         return f"{self.protocol}://{self.server}"
 
+    def safe_log_label(self) -> str:
+        """Safe representation for public logs masking IP and credentials."""
+        server = self.server or ""
+        parts = server.split(":")
+        ip = parts[0]
+        port = f":{parts[1]}" if len(parts) > 1 else ""
+        ip_octets = ip.split(".")
+        if len(ip_octets) == 4:
+            masked_ip = f"{ip_octets[0]}.***.***.{ip_octets[-1]}"
+        else:
+            masked_ip = f"{ip[:3]}***" if len(ip) > 3 else "***"
+        return f"Proxy({masked_ip}{port})"
+
     def to_httpx_proxy(self) -> str:
         """Formatted URL for httpx client."""
         if self.username and self.password:

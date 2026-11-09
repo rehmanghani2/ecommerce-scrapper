@@ -66,6 +66,18 @@ class ProxyNode:
             return f"{self.scheme}://{self.username}:****@{self.host_port}"
         return f"{self.scheme}://{self.host_port}"
 
+    def safe_log_label(self) -> str:
+        """Safe representation for public job logs masking both credentials and internal IP."""
+        parts = self.host_port.split(":")
+        ip = parts[0]
+        port = f":{parts[1]}" if len(parts) > 1 else ""
+        ip_octets = ip.split(".")
+        if len(ip_octets) == 4:
+            masked_ip = f"{ip_octets[0]}.***.***.{ip_octets[-1]}"
+        else:
+            masked_ip = f"{ip[:3]}***" if len(ip) > 3 else "***"
+        return f"Proxy({masked_ip}{port})"
+
 
 class ProxyPoolManager:
     """
