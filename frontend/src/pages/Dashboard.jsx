@@ -74,7 +74,6 @@ const INTELLIGENCE_CAPABILITIES = [
 export default function Dashboard() {
   const { user } = useAuth()
   const { data: stats } = useJobStats()
-  const { data: runningJobs } = useJobs({ status: 'running', page_size: 5 })
   const { data: latestJobsData } = useJobs({ page_size: 4 })
 
   const activeJobsCount = stats?.running_jobs || 0
