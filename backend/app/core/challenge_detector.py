@@ -74,7 +74,7 @@ def detect_challenge(
         return None
 
     source = unescape(html).lower()
-    visible_text = re.sub(r"<[^>]+>", " ", source)
+    visible_text = re.sub(r"\s+", " ", visible_text)
     visible_text = re.sub(r"\\s+", " ", visible_text)
 
     matched_provider = None
