@@ -4,7 +4,7 @@ Jobs API routes for managing scraping jobs.
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, or_
 from typing import Optional
 from datetime import datetime
 
@@ -24,6 +24,7 @@ async def list_jobs(
     page_size: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None),
     domain: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -43,6 +44,16 @@ async def list_jobs(
     if domain:
         query = query.where(Job.domain.ilike(f"%{domain}%"))
         count_query = count_query.where(Job.domain.ilike(f"%{domain}%"))
+
+    if search and search.strip():
+        search_term = f"%{search.strip()}%"
+        search_filter = or_(
+            Job.name.ilike(search_term),
+            Job.domain.ilike(search_term),
+            Job.url.ilike(search_term),
+        )
+        query = query.where(search_filter)
+        count_query = count_query.where(search_filter)
     
     # Get total count
     total_result = await db.execute(count_query)

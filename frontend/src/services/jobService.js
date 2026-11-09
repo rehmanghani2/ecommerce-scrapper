@@ -14,16 +14,7 @@ export const jobService = {
   // },
 
 
-  async listJobs(params = {page, page_size, ...(search && { search }),  ...(status && { status }),  ...(domain && { domain }),})
-      {
-    // const params = {
-    //     page,
-    //     page_size,
-    //     ...(search && { search }),
-    //     ...(status && { status }),
-    //     ...(domain && { domain }),
-    //   }
-      console.log("params ", params)
+  async listJobs(params = {}) {
     const response = await apiGet('/jobs/', params)
     return response
   },

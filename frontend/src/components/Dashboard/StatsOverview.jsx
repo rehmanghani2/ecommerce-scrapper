@@ -4,12 +4,8 @@ import {
   CubeIcon,
   DocumentTextIcon,
   CheckCircleIcon,
-  ExclamationTriangleIcon,
-  ClockIcon,
-  ArrowTrendingUpIcon,
-  ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline'
-import { cn, formatNumber, formatPercent } from '@/utils/helpers'
+import { formatNumber, formatPercent } from '@/utils/helpers'
 import { StatCard } from '@/components/Common'
 import { useJobStats } from '@/hooks/useJobs'
 
@@ -22,16 +18,12 @@ export function StatsOverview() {
       value: formatNumber(stats?.total_jobs || 0),
       icon: BriefcaseIcon,
       iconColor: 'primary',
-      change: '+12% from last week',
-      changeType: 'positive',
     },
     {
       title: 'Products Scraped',
       value: formatNumber(stats?.total_products || 0),
       icon: CubeIcon,
       iconColor: 'success',
-      change: '+23% from last week',
-      changeType: 'positive',
     },
     {
       title: 'Pages Processed',
@@ -56,8 +48,6 @@ export function StatsOverview() {
           value={stat.value}
           icon={stat.icon}
           iconColor={stat.iconColor}
-          change={stat.change}
-          changeType={stat.changeType}
           loading={isLoading}
         />
       ))}
