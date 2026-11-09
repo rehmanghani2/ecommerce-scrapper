@@ -14,6 +14,13 @@ export const scraperService = {
   },
 
   /**
+   * Discover categories and product URL samples using Playwright.
+   */
+  async discoverWebsite(url) {
+    return await apiPost('/scraper/discover', { url })
+  },
+
+  /**
    * Preview scraping for a URL
    */
   async previewScraping(url, selectors = null) {
