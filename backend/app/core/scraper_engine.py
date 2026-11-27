@@ -224,7 +224,7 @@ class ScraperEngine:
                         str(data.get("price")) if data.get("price") is not None else None
                     ),
                     "currency": data.get("currency") or "GBP",
-                    "in_stock": data.get("in_stock", True),
+                    "in_stock": data.get("in_stock"),
                     "stock_status": data.get("stock_status"),
                     "stock_quantity": data.get("stock_quantity"),
                     "image_url": data.get("image_url"),
