@@ -16,6 +16,42 @@ The API's `POST /api/v1/scraper/discover` dispatches bounded discovery to
 `POST /api/v1/scraper/start`, `/bulk/start`, retries, and scheduled jobs use Celery worker tasks; they do not launch
 Chromium or use FastAPI in-process background tasks.
 
+## Run the worker on your Windows laptop (no additional hosting)
+
+This is the recommended development setup when the API, Redis, and PostgreSQL
+are already hosted externally and reachable from your laptop.
+
+1. Clone the repository (or pull the PR branch) and open PowerShell at its root.
+2. Create/activate a Python virtual environment in `backend`, then install
+   `backend/requirements.txt`.
+3. Install the matching browser binary with
+   `python -m playwright install chromium`.
+4. Create `backend/.env` from `backend/.env.example` if needed. Set the same
+   externally reachable `DATABASE_URL`, `CELERY_BROKER_URL`, and
+   `CELERY_RESULT_BACKEND` values used by FastAPI Cloud. Keep credentials
+   private; do not commit this file. Use `rediss://` if Redis requires TLS.
+5. From the repository root, run
+   `powershell -ExecutionPolicy Bypass -File .\\workers\\run-local-windows.ps1`.
+
+The script runs Celery from the backend directory with
+`--pool=solo --concurrency=1`, which avoids Celery's prefork process model on
+Windows. Keep the terminal and laptop awake while jobs are running. Closing
+PowerShell, sleeping, disconnecting the network, or shutting down the laptop
+stops worker availability; queued tasks remain in Redis until a worker returns.
+
+Do not set cloud connection strings to `localhost`. The local worker must use
+the exact same external PostgreSQL and Redis services as the API. The API's
+`REDIS_URL` may also be needed by other application features, but Celery
+dispatch specifically uses `CELERY_BROKER_URL` and
+`CELERY_RESULT_BACKEND`.
+
+### Verify connectivity
+
+Before submitting a real crawl, verify that the worker starts without Redis
+connection errors and that it can connect to PostgreSQL. Then submit one
+small, permitted test job and confirm the worker logs show task receipt and
+completion and that the job/products appear in the cloud database.
+
 ## Deploy the worker (Railway or another Docker worker host)
 
 Create a new **worker/background service** from this GitHub repository.
