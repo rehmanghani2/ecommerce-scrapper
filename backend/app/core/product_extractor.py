@@ -314,11 +314,11 @@ class ProductExtractor:
 
     @staticmethod
     def _extract_breadcrumbs(soup: BeautifulSoup) -> List[str]:
-        selectors = ("nav[aria-label*='breadcrumb' i] a", "ol.breadcrumb a", "ul.breadcrumb a", ".breadcrumbs a", ".breadcrumb a")
+        selectors = ("nav[aria-label*='breadcrumb' i] li", "ol.breadcrumb li", "ul.breadcrumb li", ".breadcrumbs li", ".breadcrumb li", "nav[aria-label*='breadcrumb' i] a", "ol.breadcrumb a", "ul.breadcrumb a", ".breadcrumbs a", ".breadcrumb a")
         for selector in selectors:
             labels = []
             for node in soup.select(selector):
-                label = re.sub(r"\\s+", " ", node.get_text(" ", strip=True)).strip()
+                label = re.sub(r"\s+", " ", node.get_text(" ", strip=True)).strip()
                 if label and label.casefold() not in ("home", "homepage") and label.casefold() not in [v.casefold() for v in labels]:
                     labels.append(label)
             if labels:
