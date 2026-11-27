@@ -54,14 +54,26 @@ def _normalise_host(host: str | None) -> str:
 
 
 @lru_cache(maxsize=512)
-def _host_is_public(host: str, port: int) -> bool:
+def _host_public_status(host: str, port: int) -> tuple[bool, tuple[str, ...], str | None]:
+    """Resolve every address and fail closed if DNS is unavailable or any IP is non-public."""
     try:
-        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-        return bool(addresses) and all(
-            ipaddress.ip_address(item[4][0]).is_global for item in addresses
-        )
-    except (OSError, ValueError, TypeError, OverflowError):
-        return False
+        records = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        addresses = tuple(sorted({item[4][0].split("%", 1)[0] for item in records}))
+        if not addresses:
+            return False, (), "DNS returned no addresses"
+        non_public = [
+            address for address in addresses
+            if not ipaddress.ip_address(address).is_global
+        ]
+        if non_public:
+            return False, addresses, f"non-public address(es) resolved: {', '.join(non_public)}"
+        return True, addresses, None
+    except (OSError, ValueError, TypeError, OverflowError) as exc:
+        return False, (), f"{type(exc).__name__}: {exc}"
+
+
+def _host_is_public(host: str, port: int) -> bool:
+    return _host_public_status(host, port)[0]
 
 
 def _is_public_http_url(url: str) -> bool:
@@ -96,8 +108,12 @@ def _robots_allows(url: str, timeout: int = 10) -> tuple[bool, str]:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             body = response.read(512_000).decode("utf-8", errors="replace")
         parser.parse(body.splitlines())
+    except urllib.error.HTTPError as exc:
+        return False, f"robots.txt could not be checked: HTTP {exc.code} {exc.reason}"
     except (OSError, urllib.error.URLError, TimeoutError) as exc:
-        return False, f"robots.txt could not be checked: {type(exc).__name__}"
+        reason = getattr(exc, "reason", None)
+        detail = f": {reason}" if reason else ""
+        return False, f"robots.txt could not be checked: {type(exc).__name__}{detail}"
     allowed = parser.can_fetch(USER_AGENT, url)
     return allowed, "allowed by robots.txt" if allowed else "disallowed by robots.txt"
 
@@ -140,8 +156,24 @@ async def _inspect_site(adapter: SiteAdapter, browser) -> dict[str, Any]:
         "errors": [],
     }
 
-    if not _is_public_http_url(base_url):
-        report.update(status="blocked", errors=["Target failed public-address validation"])
+    parsed_base = urlparse(base_url)
+    base_port = parsed_base.port or (443 if parsed_base.scheme == "https" else 80)
+    is_public, resolved_addresses, address_error = _host_public_status(
+        parsed_base.hostname or "", base_port
+    )
+    report["public_address_check"] = {
+        "host": parsed_base.hostname,
+        "port": base_port,
+        "resolved_addresses": list(resolved_addresses),
+        "is_public": is_public,
+        "error": address_error,
+    }
+    if not is_public or not _is_public_http_url(base_url):
+        detail = f": {address_error}" if address_error else ""
+        report.update(
+            status="blocked",
+            errors=[f"Target failed public-address validation{detail}"],
+        )
         return report
 
     allowed, robots_message = _robots_allows(base_url)
