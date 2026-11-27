@@ -14,7 +14,6 @@ from sqlalchemy import select
 from app.models.database import get_db_context
 from app.models.schedule import ScheduledJob
 from app.models.job import Job, JobStatus, JobType
-from app.schemas.scraper_schema import ScraperConfig
 
 logger = logging.getLogger(__name__)
 
@@ -105,8 +104,6 @@ class SchedulerService:
         update last_run_at & next_run_at, and dispatch run_scraper_job.
         Returns the created Job's integer ID.
         """
-        from app.api.routes.scraper import run_scraper_job
-
         async with get_db_context() as db:
             sched = await db.get(ScheduledJob, schedule_id)
             if not sched:
@@ -127,7 +124,7 @@ class SchedulerService:
                 url=sched.url,
                 domain=domain,
                 job_type=JobType.FULL_SITE,
-                status=JobStatus.PENDING,
+                status=JobStatus.QUEUED,
                 config=cfg_dict,
                 user_id=sched.user_id,
             )
@@ -147,14 +144,28 @@ class SchedulerService:
             await db.commit()
             created_job_id = job.id
 
-        # 3. Dispatch the scraper job asynchronously in background
+        # 3. Dispatch through the same independent Playwright worker queue.
         try:
-            scraper_cfg = ScraperConfig(**cfg_dict) if cfg_dict else None
-        except Exception:
-            scraper_cfg = None
-
-        asyncio.create_task(run_scraper_job(created_job_id, sched.url, scraper_cfg))
-        logger.info(f"Dispatched background scrape for schedule '{sched.name}', Job ID: {created_job_id}")
+            from app.worker.tasks import execute_scrape_job
+            queued_task = execute_scrape_job.delay(created_job_id)
+            async with get_db_context() as update_db:
+                queued_job = await update_db.get(Job, created_job_id)
+                if queued_job:
+                    queued_job.celery_task_id = queued_task.id
+                    await update_db.commit()
+            logger.info(
+                "Queued scheduled crawl '%s' on browser worker; Job ID: %s",
+                sched.name,
+                created_job_id,
+            )
+        except Exception as dispatch_error:
+            async with get_db_context() as update_db:
+                queued_job = await update_db.get(Job, created_job_id)
+                if queued_job:
+                    queued_job.status = JobStatus.FAILED
+                    queued_job.error_message = f"Could not enqueue scheduled crawl: {dispatch_error}"
+                    await update_db.commit()
+            logger.exception("Failed to enqueue scheduled crawl %s", created_job_id)
         return created_job_id
 
 
