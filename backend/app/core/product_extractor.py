@@ -254,7 +254,7 @@ class ProductExtractor:
                 variant_offers = variant_offers[0] if variant_offers else {}
             if not isinstance(variant_offers, dict):
                 variant_offers = {}
-            variant_price = variant_offers.get("price")
+            variant_price, _, _ = self._parse_price(variant_offers.get("price"))
             variant_availability = str(variant_offers.get("availability") or "").lower()
             variant_image = variant.get("image")
             if isinstance(variant_image, list):
