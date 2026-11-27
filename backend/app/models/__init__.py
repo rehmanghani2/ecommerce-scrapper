@@ -1,65 +1,55 @@
-"""Database models package."""
+"""Database model package with lazy exports to avoid importing unrelated models."""
 
-from .database import Base, get_db, engine, AsyncSessionLocal
-from .job import Job, JobStatus
-from .product import (
-    Product, ProductImage, ProductVariant, PriceHistory,
-    ProductReview, ProductSentimentSummary,
-    ProductStockHistory, ProductInventoryForecast
-)
-from .schedule import ScheduledJob
-from .integration import IntegrationConfig, SyncLog
-from .alert import AlertConfig, AlertNotificationLog
-from .repricing import RepricingRule, RepricingLog
-from .selector_preset import SelectorPreset
-from .user import User
-from .proxy import ProxyRecord
-from .report import ReportSchedule, GeneratedReport
-from .simulator import PricingSimulationScenario
-from .promotion import ProductPromotion
-from .serp import SerpKeyword, SerpRankingItem
-from .buybox import ProductBuyBoxState, ProductBuyBoxHistory
-from .throttle import DomainThrottlePolicy
-from .taxonomy import (
-    TaxonomyStandard, TaxonomyNode, CategoryMappingRule, ProductTaxonomyMapping
-)
+from importlib import import_module
 
-__all__ = [
-    "Base",
-    "get_db",
-    "engine",
-    "AsyncSessionLocal",
-    "Job",
-    "JobStatus",
-    "Product",
-    "ProductImage",
-    "ProductVariant",
-    "PriceHistory",
-    "ProductReview",
-    "ProductSentimentSummary",
-    "ProductStockHistory",
-    "ProductInventoryForecast",
-    "ScheduledJob",
-    "IntegrationConfig",
-    "SyncLog",
-    "AlertConfig",
-    "AlertNotificationLog",
-    "RepricingRule",
-    "RepricingLog",
-    "SelectorPreset",
-    "User",
-    "ProxyRecord",
-    "ReportSchedule",
-    "GeneratedReport",
-    "PricingSimulationScenario",
-    "ProductPromotion",
-    "SerpKeyword",
-    "SerpRankingItem",
-    "ProductBuyBoxState",
-    "ProductBuyBoxHistory",
-    "DomainThrottlePolicy",
-    "TaxonomyStandard",
-    "TaxonomyNode",
-    "CategoryMappingRule",
-    "ProductTaxonomyMapping",
-]
+_EXPORTS = {
+    "Base": ".database",
+    "get_db": ".database",
+    "engine": ".database",
+    "AsyncSessionLocal": ".database",
+    "Job": ".job",
+    "JobStatus": ".job",
+    "Product": ".product",
+    "ProductImage": ".product",
+    "ProductVariant": ".product",
+    "PriceHistory": ".product",
+    "ProductReview": ".product",
+    "ProductSentimentSummary": ".product",
+    "ProductStockHistory": ".product",
+    "ProductInventoryForecast": ".product",
+    "ScheduledJob": ".schedule",
+    "IntegrationConfig": ".integration",
+    "SyncLog": ".integration",
+    "AlertConfig": ".alert",
+    "AlertNotificationLog": ".alert",
+    "RepricingRule": ".repricing",
+    "RepricingLog": ".repricing",
+    "SelectorPreset": ".selector_preset",
+    "User": ".user",
+    "ProxyRecord": ".proxy",
+    "ReportSchedule": ".report",
+    "GeneratedReport": ".report",
+    "PricingSimulationScenario": ".simulator",
+    "ProductPromotion": ".promotion",
+    "SerpKeyword": ".serp",
+    "SerpRankingItem": ".serp",
+    "ProductBuyBoxState": ".buybox",
+    "ProductBuyBoxHistory": ".buybox",
+    "DomainThrottlePolicy": ".throttle",
+    "TaxonomyStandard": ".taxonomy",
+    "TaxonomyNode": ".taxonomy",
+    "CategoryMappingRule": ".taxonomy",
+    "ProductTaxonomyMapping": ".taxonomy",
+}
+
+__all__ = list(_EXPORTS)
+
+
+def __getattr__(name):
+    module_name = _EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = import_module(module_name, __name__)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
