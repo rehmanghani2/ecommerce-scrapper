@@ -19,7 +19,11 @@ This file does NOT:
 - Contain Playwright low-level logic
 """
 
+import asyncio
 from typing import Optional, List, Dict, Any
+from decimal import Decimal, InvalidOperation
+from urllib.parse import urlparse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.url_frontier import URLFrontier
@@ -54,6 +58,7 @@ class ScraperEngine:
         self._scheduler: Optional[CrawlScheduler] = None
         
         self._notifier = JobEventNotifier()
+        self._product_save_lock = asyncio.Lock()
 
     async def start(self):
         """
@@ -167,52 +172,156 @@ class ScraperEngine:
         await self._scheduler.run()
         logger.info(f"[Job {self.job_id}] Step 7: CrawlScheduler.run() returned")
 
+    @staticmethod
+    def _to_decimal(value):
+        """Convert normalized price strings to Decimal without float precision loss."""
+        if value in (None, ""):
+            return None
+        try:
+            return Decimal(str(value).replace(",", "").strip())
+        except (InvalidOperation, ValueError, TypeError):
+            return None
+
     async def _on_products_found(self, products_data: List[Dict[str, Any]]):
-        """
-        Callback from scheduler when products are found on a page.
-        Saves products to database.
-        """
-        from app.models.product import Product
-        import re
+        """Serialize database writes because one AsyncSession is shared by crawl tasks."""
+        async with self._product_save_lock:
+            await self._persist_products(products_data)
+
+    async def _persist_products(self, products_data: List[Dict[str, Any]]):
+        """Upsert products within this job using canonical product URLs."""
+        from app.models.product import Product, ProductImage, ProductVariant
 
         saved_count = 0
+        processed_count = 0
+        source_domain = (urlparse(self.start_url).hostname or "").lower()
         for data in products_data:
+            name = str(data.get("name") or "").strip()
+            url = str(data.get("url") or "").strip()
+            if not name or not url:
+                continue
+
+            savepoint = None
             try:
-                # Basic cleaning of price
-                price_val = None
-                if data.get("price"):
-                    price_str = str(data["price"])
-                    # Extract numeric value from string like "£12.34"
-                    price_match = re.search(r"(\d+\.?\d*)", price_str)
-                    if price_match:
-                        price_val = float(price_match.group(1))
-
-                product = Product(
-                    job_id=self.job_id,
-                    name=data.get("name", "Unknown Product"),
-                    url=data.get("url"),
-                    price=price_val,
-                    price_text=data.get("price"),
-                    image_url=data.get("image_url"),
-                    source_domain=self.start_url.split("//")[-1].split("/")[0]
+                savepoint = await self.db.begin_nested()
+                result = await self.db.execute(
+                    select(Product).where(
+                        Product.job_id == self.job_id,
+                        Product.url == url,
+                    ).limit(1)
                 )
-                self.db.add(product)
-                saved_count += 1
-            except Exception as e:
-                logger.warning(f"Failed to prepare product for saving: {e}")
+                product = result.scalar_one_or_none()
+                values = {
+                    "name": name,
+                    "title": data.get("title"),
+                    "description": data.get("description"),
+                    "sku": data.get("sku"),
+                    "product_id": data.get("product_id"),
+                    "upc": data.get("upc"),
+                    "ean": data.get("ean") or data.get("gtin"),
+                    "brand": data.get("brand"),
+                    "price": self._to_decimal(data.get("price")),
+                    "price_text": data.get("price_text") or (
+                        str(data.get("price")) if data.get("price") is not None else None
+                    ),
+                    "currency": data.get("currency") or "GBP",
+                    "in_stock": data.get("in_stock"),
+                    "stock_status": data.get("stock_status"),
+                    "stock_quantity": data.get("stock_quantity"),
+                    "image_url": data.get("image_url"),
+                    "category": data.get("category"),
+                    "subcategory": data.get("subcategory"),
+                    "category_path": data.get("category_path"),
+                    "categories": data.get("categories") or [],
+                    "source_domain": source_domain,
+                    "raw_data": data,
+                }
 
-        if saved_count > 0:
-            logger.info(f"[Job {self.job_id}] Saving {saved_count} products...")
+                is_new = product is None
+                if is_new:
+                    product = Product(
+                        job_id=self.job_id,
+                        url=url,
+                        name=name,
+                        source_domain=source_domain,
+                    )
+                    self.db.add(product)
+
+                for key, value in values.items():
+                    if value is not None and value != "":
+                        setattr(product, key, value)
+                await self.db.flush()
+
+                # Save all product images without duplicating existing image rows.
+                image_urls = list(data.get("images") or [])
+                if data.get("image_url") and data["image_url"] not in image_urls:
+                    image_urls.insert(0, data["image_url"])
+                existing_images = set()
+                if not is_new:
+                    image_result = await self.db.execute(
+                        select(ProductImage.url).where(
+                            ProductImage.product_id == product.id
+                        )
+                    )
+                    existing_images = set(image_result.scalars().all())
+                for index, image_url in enumerate(image_urls):
+                    if isinstance(image_url, str) and image_url and image_url not in existing_images:
+                        self.db.add(ProductImage(
+                            product_id=product.id,
+                            url=image_url,
+                            position=index,
+                            is_primary=(index == 0),
+                        ))
+
+                # Save structured variants exposed through Schema.org hasVariant.
+                for variant_data in data.get("variants") or []:
+                    variant_name = str(variant_data.get("name") or "").strip()
+                    if not variant_name:
+                        continue
+                    variant_id = str(variant_data.get("variant_id") or "").strip() or None
+                    variant_sku = str(variant_data.get("sku") or "").strip() or None
+                    variant_query = select(ProductVariant).where(
+                        ProductVariant.product_id == product.id
+                    )
+                    if variant_id:
+                        variant_query = variant_query.where(ProductVariant.variant_id == variant_id)
+                    elif variant_sku:
+                        variant_query = variant_query.where(ProductVariant.sku == variant_sku)
+                    else:
+                        variant_query = variant_query.where(ProductVariant.name == variant_name)
+                    variant_result = await self.db.execute(variant_query.limit(1))
+                    variant = variant_result.scalar_one_or_none()
+                    if variant is None:
+                        variant = ProductVariant(
+                            product_id=product.id,
+                            variant_id=variant_id,
+                            sku=variant_sku,
+                            name=variant_name,
+                        )
+                        self.db.add(variant)
+                    variant.price = self._to_decimal(variant_data.get("price"))
+                    variant.in_stock = variant_data.get("in_stock", True)
+                    variant.attributes = variant_data.get("attributes") or {}
+                    if variant_data.get("stock_quantity") is not None:
+                        variant.stock_quantity = variant_data["stock_quantity"]
+                    if variant_data.get("image_url"):
+                        variant.image_url = variant_data["image_url"]
+
+                await savepoint.commit()
+                processed_count += 1
+                if is_new:
+                    saved_count += 1
+            except Exception:
+                logger.exception("[Job %s] Failed to persist product URL %s", self.job_id, url)
+                if savepoint is not None:
+                    await savepoint.rollback()
+
+        if processed_count:
             await self.db.commit()
-            logger.info(f"[Job {self.job_id}] Successfully saved {saved_count} products to database")
-            
-            # Notify progress
+        if saved_count:
+            logger.info("[Job %s] Inserted %s new products", self.job_id, saved_count)
             await self._notifier.publish(
                 f"job:{self.job_id}",
-                {
-                    "event": "products_found",
-                    "count": saved_count
-                }
+                {"event": "products_found", "count": saved_count},
             )
 
     async def _on_challenge_detected(self, url: str, challenge: Dict[str, Any]):
