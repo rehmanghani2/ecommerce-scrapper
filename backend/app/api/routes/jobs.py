@@ -287,18 +287,14 @@ async def delete_job(job_id: str, db: AsyncSession = Depends(get_db)):
     
     return {"success": True, "message": "Job deleted"}
 
-from fastapi import BackgroundTasks
 @router.post("/{job_id}/retry")
 async def retry_job(
     job_id: str,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Retry a failed job.
     """
-    from fastapi import BackgroundTasks
-    
     query = select(Job).where(Job.job_id == job_id)
     result = await db.execute(query)
     job = result.scalar_one_or_none()
@@ -312,18 +308,30 @@ async def retry_job(
             detail="Only failed jobs can be retried"
         )
     
-    # Reset job state
-    job.status = JobStatus.PENDING
+    # Reset job state and dispatch the retry to the dedicated worker.
+    job.status = JobStatus.QUEUED
     job.error_message = None
     job.error_trace = None
     job.progress = 0
     job.started_at = None
     job.completed_at = None
     await db.commit()
-    
-    # TODO: Queue job for retry
-    
-    return {"success": True, "message": "Job queued for retry", "status": "pending"}
+
+    try:
+        from app.worker.tasks import execute_scrape_job
+        queued_task = execute_scrape_job.delay(job.id)
+        job.celery_task_id = queued_task.id
+        await db.commit()
+    except Exception as dispatch_error:
+        job.status = JobStatus.FAILED
+        job.error_message = f"Could not enqueue retry: {dispatch_error}"
+        await db.commit()
+        raise HTTPException(
+            status_code=503,
+            detail="Scraping queue is unavailable. Please try again shortly."
+        ) from dispatch_error
+
+    return {"success": True, "message": "Job queued for retry", "status": "queued"}
 
 
 @router.get("/{job_id}/logs")

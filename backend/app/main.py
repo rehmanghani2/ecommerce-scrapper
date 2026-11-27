@@ -41,15 +41,8 @@ async def lifespan(app: FastAPI):
     # Create export directory
     os.makedirs(settings.EXPORT_PATH, exist_ok=True)
     
-    # Install Playwright browsers
-    try:
-        import sys
-        import subprocess
-        logger.info("Installing Playwright chromium browser binary...")
-        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
-        logger.info("Playwright ready")
-    except Exception as e:
-        logger.warning(f"Playwright auto-installation warning: {e}")
+    # Browser binaries are installed in the dedicated Playwright worker image.
+    # The API process must not download or launch Chromium during startup.
     
     # Start automated cron scheduler service
     scheduler_service.start()

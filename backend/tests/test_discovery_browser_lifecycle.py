@@ -1,12 +1,12 @@
 import ast
 import inspect
 
-from app.api.routes.scraper import discover_website
+from app.api.routes.scraper import _discover_website_local
 
 
 def test_discovery_does_not_close_browser_after_playwright_context_exits():
     """The async_playwright context owns browser shutdown and its driver lifecycle."""
-    source = inspect.getsource(discover_website)
+    source = inspect.getsource(_discover_website_local)
     tree = ast.parse(source)
 
     calls = [

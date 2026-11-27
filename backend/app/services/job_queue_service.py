@@ -1,17 +1,14 @@
-import redis.asyncio as redis
-from app.config import settings
+"""Queue scraping jobs through Celery so API and browser runtimes stay separate."""
 
 
 class JobQueueService:
+    async def enqueue(self, job_id: str) -> str:
+        from app.worker.tasks import execute_scrape_job
 
-    def __init__(self):
-        self._redis = redis.from_url(
-            settings.REDIS_URL,
-            decode_responses=True
-        )
-
-    async def enqueue(self, job_id: str):
-        await self._redis.rpush("crawl:job_queue", job_id)
+        result = execute_scrape_job.delay(job_id)
+        return result.id
 
     async def close(self):
-        await self._redis.close()
+        # Celery owns its broker connection pool; there is no per-request
+        # Redis client to close here.
+        return None

@@ -28,13 +28,13 @@ jobs:
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
 
-      - name: Install focused test dependencies
+      - name: Install backend and test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install pytest==7.4.4 pytest-asyncio==0.23.3 beautifulsoup4==4.12.3 lxml==5.1.0 SQLAlchemy==2.0.25 pydantic==2.5.3 pydantic-settings==2.1.0 aiosqlite httpx==0.26.0
+          python -m pip install -r requirements.txt aiosqlite
 
       - name: Run extraction and export regression tests
         env:
           PYTHONPATH: .
         run: |
-          pytest -q tests/test_product_extractor_enhancements.py tests/test_platform_variant_extraction.py tests/test_export_variant_metadata.py tests/test_product_extractor_pipeline.py tests/test_site_adapters.py tests/test_live_store_smoke.py tests/test_sitemap_parser.py tests/test_scraper_preview_routes.py tests/test_discovery_browser_lifecycle.py
+          pytest -q tests/test_product_extractor_enhancements.py tests/test_platform_variant_extraction.py tests/test_export_variant_metadata.py tests/test_product_extractor_pipeline.py tests/test_site_adapters.py tests/test_live_store_smoke.py tests/test_sitemap_parser.py tests/test_scraper_preview_routes.py tests/test_discovery_browser_lifecycle.py tests/test_playwright_worker_architecture.py

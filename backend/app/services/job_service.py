@@ -63,7 +63,7 @@ class JobService:
             url=url,
             domain=domain,
             job_type=job_type,
-            status=JobStatus.PENDING,
+            status=JobStatus.QUEUED,
             config=config or {},
             user_id=user_id
         )
@@ -78,10 +78,14 @@ class JobService:
         # Enqueue job
         try:
             queue = JobQueueService()
-            await queue.enqueue(job.job_id)
+            job.celery_task_id = await queue.enqueue(job.job_id)
+            await self.db.commit()
             await queue.close()
         except Exception as e:
-            logger.warning(f"Failed to enqueue job in Redis: {e}")
+            job.status = JobStatus.FAILED
+            job.error_message = f"Could not enqueue scraping job: {e}"
+            await self.db.commit()
+            logger.warning(f"Failed to enqueue job in Celery: {e}")
                 
         return job
     
