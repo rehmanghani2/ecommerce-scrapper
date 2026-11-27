@@ -50,7 +50,7 @@ SITE_ADAPTERS = (
         "leeli-cycles", "Leeli Cycles", ("leelicycles.co.uk",), "generic",
         ".product-card, .product-item, .product, li.product, [data-product-id]",
         ("a[rel='next']", ".pagination a.next", "a.next.page-numbers"),
-        ("nav a[href*='/collections/']", "nav a[href*='/category/']"),
+        ("a[href*='/collections/']", "a[href*='/category/']"),
     ),
     _profile(
         "ballicom", "Ballicom", ("ballicom.co.uk",), "generic",
