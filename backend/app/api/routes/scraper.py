@@ -177,8 +177,10 @@ async def discover_website(payload: Dict[str, Any]):
     import re
 
     adapter = get_site_adapter(url)
-    browser = None
     try:
+        # The async_playwright context owns the browser process and shuts it down
+        # before its driver connection closes. Do not call browser.close() after
+        # leaving this context: that writes to a closed Playwright transport.
         async with async_playwright() as playwright:
             browser = await playwright.chromium.launch(headless=True)
             context = await browser.new_context(
@@ -485,9 +487,6 @@ async def discover_website(payload: Dict[str, Any]):
     except Exception as exc:
         logger.exception("Website discovery failed for %s", url)
         raise HTTPException(status_code=502, detail=f"Website analysis failed: {str(exc)[:300]}")
-    finally:
-        if browser:
-            await browser.close()
 
 
 # async def preview_scraping(request: ScraperPreviewRequest):
