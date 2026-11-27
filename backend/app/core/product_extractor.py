@@ -40,6 +40,7 @@ class ProductExtractor:
         container_selector = self.selector_config.get("product_container")
         products: List[Dict[str, Any]] = []
         seen = set()
+        breadcrumbs = self._extract_breadcrumbs(soup)
 
         if container_selector:
             for container in soup.select(container_selector):
@@ -79,6 +80,23 @@ class ProductExtractor:
             product = self._from_meta(soup, base_url)
             if product:
                 products.append(product)
+        platform_product = self._extract_platform_product(soup, base_url)
+        if platform_product:
+            existing = next((item for item in products if item.get("url") == platform_product.get("url")), None)
+            if existing:
+                if platform_product.get("variants"):
+                    existing["variants"] = platform_product["variants"]
+                for field in ("sku", "brand", "description", "price", "currency", "image_url", "images"):
+                    if not existing.get(field) and platform_product.get(field):
+                        existing[field] = platform_product[field]
+            else:
+                products.append(platform_product)
+        for product in products:
+            if breadcrumbs:
+                product.setdefault("categories", breadcrumbs)
+                product.setdefault("category", breadcrumbs[-1])
+                product.setdefault("subcategory", breadcrumbs[-2] if len(breadcrumbs) > 1 else None)
+                product.setdefault("category_path", " > ".join(breadcrumbs))
         return products
 
     @staticmethod
@@ -294,6 +312,85 @@ class ProductExtractor:
         self._normalise(item, base_url)
         return {key: value for key, value in item.items() if value not in (None, "")}
 
+    @staticmethod
+    def _extract_breadcrumbs(soup: BeautifulSoup) -> List[str]:
+        selectors = ("nav[aria-label*='breadcrumb' i] a", "ol.breadcrumb a", "ul.breadcrumb a", ".breadcrumbs a", ".breadcrumb a")
+        for selector in selectors:
+            labels = []
+            for node in soup.select(selector):
+                label = re.sub(r"\\s+", " ", node.get_text(" ", strip=True)).strip()
+                if label and label.casefold() not in ("home", "homepage") and label.casefold() not in [v.casefold() for v in labels]:
+                    labels.append(label)
+            if labels:
+                return labels
+        return []
+
+    def _extract_platform_product(self, soup: BeautifulSoup, base_url: str):
+        for node in soup.select('script[type="application/json"], script[id*="ProductJson" i]'):
+            try:
+                payload = json.loads(node.string or node.get_text() or "")
+            except (TypeError, ValueError):
+                continue
+            for record in self._walk_json_objects(payload):
+                if isinstance(record.get("variants"), list) and record.get("title") and (record.get("handle") or record.get("vendor")):
+                    return self._from_shopify_json(record, base_url)
+        form = soup.select_one("form.variations_form[data-product_variations]")
+        if form:
+            try:
+                variations = json.loads(form.get("data-product_variations") or "[]")
+            except (TypeError, ValueError):
+                variations = []
+            if isinstance(variations, list) and variations:
+                return self._from_woocommerce(soup, variations, base_url)
+        return None
+
+    @staticmethod
+    def _walk_json_objects(payload):
+        if isinstance(payload, list):
+            for item in payload:
+                yield from ProductExtractor._walk_json_objects(item)
+        elif isinstance(payload, dict):
+            yield payload
+            for value in payload.values():
+                if isinstance(value, (dict, list)):
+                    yield from ProductExtractor._walk_json_objects(value)
+
+    def _from_shopify_json(self, record: Dict[str, Any], base_url: str):
+        images = [urljoin(base_url, str((img.get("src") if isinstance(img, dict) else img))) for img in record.get("images", []) if img]
+        variants = []
+        option_names = [str(value) for value in (record.get("options") or [])]
+        for variant in record.get("variants") or []:
+            if not isinstance(variant, dict):
+                continue
+            attributes = {option_names[i]: variant.get(f"option{i + 1}") for i in range(len(option_names)) if variant.get(f"option{i + 1}") not in (None, "", "Default Title")}
+            featured = variant.get("featured_image") or {}
+            image = featured.get("src") if isinstance(featured, dict) else featured
+            price = self._parse_price(variant.get("price"))[0]
+            original = self._parse_price(variant.get("compare_at_price"))[0]
+            variants.append({"variant_id": str(variant.get("id") or ""), "sku": variant.get("sku"), "name": variant.get("public_title") or variant.get("title") or record.get("title") or "Variant", "price": price, "original_price": original, "in_stock": bool(variant.get("available", False)), "stock_quantity": variant.get("inventory_quantity"), "attributes": attributes, "image_url": urljoin(base_url, str(image)) if image else None})
+        first = (record.get("variants") or [{}])[0]
+        return {"name": record.get("title"), "description": BeautifulSoup(record.get("body_html") or "", "lxml").get_text(" ", strip=True), "sku": first.get("sku"), "product_id": str(record.get("id")) if record.get("id") else None, "brand": record.get("vendor"), "price": self._parse_price(first.get("price"))[0], "currency": self._currency_from_text(str(first.get("price") or "")), "url": urljoin(base_url, "/products/" + str(record.get("handle"))) if record.get("handle") else base_url, "image_url": images[0] if images else None, "images": images, "variants": variants, "platform": "shopify", "product_type": record.get("product_type"), "tags": record.get("tags") or []}
+
+    def _from_woocommerce(self, soup: BeautifulSoup, variations: List[Dict[str, Any]], base_url: str):
+        title = soup.select_one("h1.product_title, .product_title, h1.entry-title")
+        name = title.get_text(" ", strip=True) if title else None
+        if not name:
+            return None
+        price_node = soup.select_one("p.price .woocommerce-Price-amount, .summary .price")
+        raw_price = price_node.get_text(" ", strip=True) if price_node else None
+        sku_node = soup.select_one(".sku")
+        image_node = soup.select_one(".woocommerce-product-gallery__image img, img.wp-post-image")
+        image = (image_node.get("data-src") or image_node.get("src")) if image_node else None
+        variants = []
+        for variation in variations:
+            if not isinstance(variation, dict):
+                continue
+            attrs = {str(k).replace("attribute_", "").replace("pa_", "").replace("-", " ").title(): v for k, v in (variation.get("attributes") or {}).items() if v not in (None, "")}
+            image_data = variation.get("image") or {}
+            variant_image = (image_data.get("full_src") or image_data.get("src")) if isinstance(image_data, dict) else None
+            variants.append({"variant_id": str(variation.get("variation_id") or ""), "sku": variation.get("sku"), "name": " / ".join(str(v) for v in attrs.values()) or name, "price": self._parse_price(variation.get("display_price"))[0], "original_price": self._parse_price(variation.get("display_regular_price"))[0], "in_stock": bool(variation.get("is_in_stock", False)), "stock_quantity": variation.get("max_qty"), "attributes": attrs, "image_url": urljoin(base_url, str(variant_image)) if variant_image else None})
+        canonical = soup.find("link", rel="canonical")
+        return {"name": name, "sku": sku_node.get_text(" ", strip=True) if sku_node else None, "price": self._parse_price(raw_price)[0], "currency": self._currency_from_text(raw_price or ""), "url": urljoin(base_url, canonical.get("href")) if canonical and canonical.get("href") else base_url, "image_url": urljoin(base_url, image) if image else None, "images": [urljoin(base_url, image)] if image else [], "variants": variants, "platform": "woocommerce"}
     def _from_meta(self, soup: BeautifulSoup, base_url: str):
         def meta(*names):
             for name in names:
