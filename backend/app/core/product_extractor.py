@@ -334,7 +334,7 @@ class ProductExtractor:
                 payload = json.loads(node.string or node.get_text() or "")
             except (TypeError, ValueError):
                 continue
-            for record in self._walk_breadcrumb_jsonld(payload):
+            for record in ProductExtractor._walk_breadcrumb_jsonld(payload):
                 labels = []
                 for entry in record.get("itemListElement") or []:
                     if not isinstance(entry, dict):
