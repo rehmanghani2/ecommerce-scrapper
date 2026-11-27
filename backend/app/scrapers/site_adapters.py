@@ -56,7 +56,17 @@ SITE_ADAPTERS = (
         "ballicom", "Ballicom", ("ballicom.co.uk",), "generic",
         ".product-item, .product-card, .product, li.product, [data-product-id]",
         ("a[rel='next']", ".pagination a.next", ".pages a.next"),
-        ("nav a[href*='/category/']", "nav a[href*='/categories/']"),
+        (
+            "a[href*='/all-products/']",
+            "a[href*='/hardware/']",
+            "a[href*='/office-supplies/']",
+            "a[href*='/software/']",
+            "a[href*='/electronics/']",
+            "a[href*='/furniture/']",
+            "a[href*='/facilities/']",
+            "nav a[href*='/category/']",
+            "nav a[href*='/categories/']",
+        ),
     ),
     _profile(
         "exertis-store", "Exertis Store", ("store.exertis.co.uk",), "generic",

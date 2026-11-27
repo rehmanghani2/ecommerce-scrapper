@@ -118,6 +118,31 @@ def _robots_allows(url: str, timeout: int = 10) -> tuple[bool, str]:
     return allowed, "allowed by robots.txt" if allowed else "disallowed by robots.txt"
 
 
+def _classify_readiness(report: dict[str, Any]) -> dict[str, Any]:
+    """Separate a completed diagnostic run from verified catalogue extraction."""
+    public_check = report.get("public_address_check") or {}
+    if public_check and not public_check.get("is_public", True):
+        error = (public_check.get("error") or "").lower()
+        outcome = "dns_resolution_failed" if "gaierror" in error or "no address" in error else "public_address_rejected"
+        return {"outcome": outcome, "pipeline_stage": "target_validation", "product_extraction_verified": False}
+    robots = report.get("robots") or ""
+    if robots and robots != "allowed by robots.txt":
+        return {"outcome": "robots_check_blocked", "pipeline_stage": "robots_check", "product_extraction_verified": False}
+    if report.get("status") == "challenge_detected":
+        return {"outcome": "access_challenge_detected", "pipeline_stage": "page_access", "product_extraction_verified": False}
+    category_pages = report.get("category_pages") or []
+    if any("HTTP 403" in (item.get("error") or "") for item in category_pages):
+        return {"outcome": "category_access_denied", "pipeline_stage": "category_navigation", "product_extraction_verified": False}
+    product_page = report.get("product_page") or {}
+    if product_page.get("loaded") and product_page.get("extracted_records", 0) > 0:
+        return {"outcome": "product_extraction_verified", "pipeline_stage": "product_detail_extraction", "product_extraction_verified": True}
+    if report.get("category_candidates", 0) == 0 and report.get("root_product_cards", 0) == 0:
+        return {"outcome": "no_catalogue_signals_detected", "pipeline_stage": "discovery", "product_extraction_verified": False}
+    if report.get("category_candidates", 0) > 0:
+        return {"outcome": "categories_detected_extraction_unverified", "pipeline_stage": "category_discovery", "product_extraction_verified": False}
+    return {"outcome": "catalogue_extraction_unverified", "pipeline_stage": "discovery", "product_extraction_verified": False}
+
+
 def _is_challenge(title: str, text: str) -> bool:
     sample = f"{title}\n{text[:6000]}".lower()
     return any(marker in sample for marker in CHALLENGE_MARKERS)
@@ -379,6 +404,9 @@ async def run_smoke_test(output: Path) -> list[dict[str, Any]]:
                 results.append(await _inspect_site(adapter, browser))
         finally:
             await browser.close()
+
+    for result in results:
+        result["readiness"] = _classify_readiness(result)
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),

@@ -42,3 +42,10 @@ def test_product_extractor_uses_matching_site_profile():
     assert products[0]["price"] == "799.00"
     assert products[0]["currency"] == "GBP"
     assert products[0]["url"] == "https://leelicycles.co.uk/products/trail-bike"
+
+
+def test_ballicom_profile_covers_published_product_catalogue_routes():
+    ballicom = get_site_adapter("https://www.ballicom.co.uk/")
+    selectors = set(ballicom.category_selectors)
+    for path in ("all-products", "hardware", "office-supplies", "software", "electronics", "furniture", "facilities"):
+        assert "a[href*='/" + path + "/']" in selectors
