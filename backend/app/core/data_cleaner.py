@@ -200,8 +200,10 @@ class DataCleaner:
         if not source and (url or self.base_url):
             source = (urlsplit(url or self.base_url).hostname or "").lower()
 
-        # URL is strongest at retailer level and retains meaningful variant parameters.
-        if url:
+        # A listing/root URL is only a fallback assigned by some extractors,
+        # not a product identity. Preserve identifiers for those records.
+        canonical_base = self._canonicalize_url(self.base_url)
+        if url and url != canonical_base:
             return f"url:{source}:{url}"
 
         for field in ("gtin14", "gtin13", "gtin12", "gtin8", "gtin", "ean", "upc", "sku", "product_id", "mpn"):
