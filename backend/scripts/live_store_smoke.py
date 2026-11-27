@@ -23,17 +23,16 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
-from playwright.async_api import async_playwright
-
 from app.core.product_extractor import ProductExtractor
 from app.scrapers.site_adapters import SITE_ADAPTERS, SiteAdapter
 
 
 USER_AGENT = "EcommerceScraperCompatibilityTest/1.0 (+respectful storefront smoke test)"
 NAVIGATION_TIMEOUT_MS = 25_000
-MAX_CATEGORY_PAGES = 2
+MAX_CATEGORY_PAGES = 1
+MAX_PAGINATION_PAGES = 1
 MAX_PRODUCT_PAGES = 1
-MAX_NAVIGATIONS_PER_SITE = 1 + MAX_CATEGORY_PAGES + MAX_PRODUCT_PAGES
+MAX_NAVIGATIONS_PER_SITE = 1 + MAX_CATEGORY_PAGES + MAX_PAGINATION_PAGES + MAX_PRODUCT_PAGES
 NAVIGATION_DELAY_SECONDS = 1.5
 CHALLENGE_MARKERS = (
     "verify you are human",
@@ -244,11 +243,45 @@ async def _inspect_site(adapter: SiteAdapter, browser) -> dict[str, Any]:
                     "(anchors) => anchors.map(a => a.href).slice(0, 100)"
                 )
                 product_urls.extend(_absolute_same_host_links(card_hrefs, page.url, adapter))
+                pagination_hrefs = await page.locator("a[href]").evaluate_all(
+                    """(anchors, selectors) => anchors.filter(a => selectors.some(s => {
+                      try { return a.matches(s); } catch (_) { return false; }
+                    })).map(a => a.href)""",
+                    list(adapter.pagination_selectors),
+                ) if adapter.pagination_selectors else []
+                pagination_urls = _absolute_same_host_links(pagination_hrefs, page.url, adapter)
                 category_result.update(
                     title=category_title,
                     extracted_products=len(products),
                     product_link_candidates=len(card_hrefs),
+                    pagination_candidates=len(pagination_urls),
                 )
+                if pagination_urls and report["navigations"] < MAX_NAVIGATIONS_PER_SITE - MAX_PRODUCT_PAGES:
+                    next_url = pagination_urls[0]
+                    next_ok, next_error = await navigate(next_url)
+                    pagination_result = {
+                        "url": next_url,
+                        "loaded": next_ok,
+                        "error": next_error or None,
+                    }
+                    if next_ok:
+                        next_title = await page.title()
+                        next_text = await page.locator("body").inner_text(timeout=5000)
+                        if _is_challenge(next_title, next_text):
+                            pagination_result["challenge_detected"] = True
+                            report["status"] = "challenge_detected"
+                        else:
+                            next_products = extractor.extract(await page.content(), page.url)
+                            pagination_result.update(
+                                title=next_title,
+                                extracted_products=len(next_products),
+                            )
+                    category_result["pagination_check"] = pagination_result
+                    if pagination_result.get("loaded"):
+                        next_card_hrefs = await page.locator(f"{product_container} a[href]").evaluate_all(
+                            "(anchors) => anchors.map(a => a.href).slice(0, 100)"
+                        )
+                        product_urls.extend(_absolute_same_host_links(next_card_hrefs, page.url, adapter))
             report["category_pages"].append(category_result)
 
         if report["status"] == "challenge_detected":
@@ -285,6 +318,8 @@ async def _inspect_site(adapter: SiteAdapter, browser) -> dict[str, Any]:
 
 
 async def run_smoke_test(output: Path) -> list[dict[str, Any]]:
+    from playwright.async_api import async_playwright
+
     results: list[dict[str, Any]] = []
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
@@ -300,6 +335,7 @@ async def run_smoke_test(output: Path) -> list[dict[str, Any]]:
         "limits": {
             "max_navigations_per_site": MAX_NAVIGATIONS_PER_SITE,
             "max_category_pages": MAX_CATEGORY_PAGES,
+            "max_pagination_pages": MAX_PAGINATION_PAGES,
             "max_product_pages": MAX_PRODUCT_PAGES,
             "navigation_delay_seconds": NAVIGATION_DELAY_SECONDS,
         },
