@@ -149,12 +149,16 @@ async def _inspect_site(adapter: SiteAdapter, browser) -> dict[str, Any]:
 
     async def guard_request(route):
         request_url = route.request.url
-        if urlparse(request_url).scheme in {"http", "https"} and not _is_public_http_url(request_url):
+        parsed_request = urlparse(request_url)
+        if parsed_request.scheme in {"http", "https"} and not _is_public_http_url(request_url):
             await route.abort("blockedbyclient")
             return
-        if urlparse(request_url).scheme in {"http", "https"}:
-            host = urlparse(request_url).hostname
-            if not host or not _is_public_http_url(request_url):
+        if route.request.is_navigation_request():
+            try:
+                is_main_frame = route.request.frame.parent_frame is None
+            except Exception:
+                is_main_frame = False
+            if is_main_frame and not _same_storefront(request_url, adapter):
                 await route.abort("blockedbyclient")
                 return
         await route.continue_()
