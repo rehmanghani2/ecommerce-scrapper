@@ -25,7 +25,7 @@ class ProductExtractor:
             "sku": "[itemprop='sku']::attr(content), [data-sku]::attr(data-sku)",
             "brand": "[itemprop='brand']::attr(content), .product-brand, .brand",
             "description": "[itemprop='description'], .product-description",
-            "availability": "[itemprop='availability']::attr(href), [itemprop='availability']::attr(content), .stock-status, .availability",
+            "availability": "[itemprop='availability']::attr(href), [itemprop='availability']::attr(content), [itemprop='availability'], .stock-status, .availability",
         },
     }
 
