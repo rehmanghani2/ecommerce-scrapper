@@ -1,4 +1,4 @@
-from app.scripts.live_store_smoke import (
+from scripts.live_store_smoke import (
     _absolute_same_host_links,
     _is_challenge,
     _normalise_host,
