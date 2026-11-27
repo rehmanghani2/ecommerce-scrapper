@@ -37,6 +37,15 @@ def test_start_endpoint_queues_crawl_instead_of_using_api_background_tasks():
     assert "run_scraper_job" not in endpoint_source
 
 
+def test_bulk_start_endpoint_dispatches_to_worker():
+    path = BACKEND / "app" / "api" / "routes" / "scraper.py"
+    source = path.read_text(encoding="utf-8")
+    endpoint = _function(ast.parse(source), "start_bulk_scraping")
+    endpoint_source = ast.get_source_segment(source, endpoint)
+    assert "execute_bulk_scrape_job.delay" in endpoint_source
+    assert "background_tasks.add_task" not in endpoint_source
+
+
 def test_worker_runs_scraper_engine_inside_its_own_async_loop():
     path = BACKEND / "app" / "worker" / "tasks.py"
     source = path.read_text(encoding="utf-8")
