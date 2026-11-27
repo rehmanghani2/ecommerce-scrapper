@@ -221,7 +221,10 @@ class ScraperEngine:
                     "brand": data.get("brand"),
                     "vendor": data.get("vendor") or data.get("brand"),
                     "tags": data.get("tags") or [],
-                    "attributes": data.get("attributes") or {},
+                    "attributes": data.get("attributes") or (
+                        {"product_type": data.get("product_type")}
+                        if data.get("product_type") else {}
+                    ),
                     "price": self._to_decimal(data.get("price")),
                     "price_text": data.get("price_text") or (
                         str(data.get("price")) if data.get("price") is not None else None
