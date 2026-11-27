@@ -87,6 +87,7 @@ class ProductExtractor:
                 item for item in products
                 if item.get("url") == platform_product.get("url")
                 or self._identity(item, base_url) == platform_identity
+                or str(item.get("name") or "").strip().casefold() == str(platform_product.get("name") or "").strip().casefold()
             ), None)
             if existing:
                 if platform_product.get("variants"):
