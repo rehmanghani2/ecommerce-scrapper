@@ -78,7 +78,8 @@ class JobService:
         # Enqueue job
         try:
             queue = JobQueueService()
-            await queue.enqueue(job.job_id)
+            job.celery_task_id = await queue.enqueue(job.job_id)
+            await self.db.commit()
             await queue.close()
         except Exception as e:
             logger.warning(f"Failed to enqueue job in Redis: {e}")
