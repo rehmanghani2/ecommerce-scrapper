@@ -2,7 +2,7 @@
 Scraper API routes.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List, Dict, Any
@@ -33,7 +33,6 @@ router = APIRouter()
 @router.post("/start", response_model=ScraperResponse)
 async def start_scraping(
     request: ScraperRequest,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
@@ -68,14 +67,24 @@ async def start_scraping(
         await db.commit()
         await db.refresh(job)
         
-        # Start scraping in background
-        # In production, this would be sent to Celery
-        background_tasks.add_task(
-            run_scraper_job,
-            job.id,
-            str(request.url),
-            request.config
-        )
+        # Mark the job queued before dispatch so the independent worker can
+        # safely claim it as soon as the broker receives the message.
+        job.status = JobStatus.QUEUED
+        await db.commit()
+
+        try:
+            from app.worker.tasks import execute_scrape_job
+            queued_task = execute_scrape_job.delay(job.id)
+            job.celery_task_id = queued_task.id
+            await db.commit()
+        except Exception as queue_error:
+            job.status = JobStatus.FAILED
+            job.error_message = f"Could not enqueue scraping job: {queue_error}"
+            await db.commit()
+            raise HTTPException(
+                status_code=503,
+                detail="Scraping queue is unavailable. Please try again shortly."
+            ) from queue_error
         
         return ScraperResponse(
             success=True,
@@ -159,8 +168,7 @@ def _normalise_discovery_url(href: str, base_url: str) -> Optional[str]:
     return candidate
 
 
-@router.post("/discover")
-async def discover_website(payload: Dict[str, Any]):
+async def _discover_website_local(payload: Dict[str, Any]):
     """
     Render a public storefront with Playwright and return a bounded discovery
     report: platform hints, navigation categories, sitemap locations and
@@ -487,6 +495,48 @@ async def discover_website(payload: Dict[str, Any]):
     except Exception as exc:
         logger.exception("Website discovery failed for %s", url)
         raise HTTPException(status_code=502, detail=f"Website analysis failed: {str(exc)[:300]}")
+
+
+@router.post("/discover")
+async def discover_website(payload: Dict[str, Any]):
+    """Run browser-based discovery on the dedicated Playwright worker."""
+    url = payload.get("url")
+    if not isinstance(url, str) or not _is_public_target(url):
+        raise HTTPException(
+            status_code=400,
+            detail="Provide a valid public HTTP or HTTPS website URL."
+        )
+
+    import asyncio
+    from celery.exceptions import TimeoutError as CeleryTimeoutError
+    from app.config import settings
+    from app.worker.tasks import discover_website_task
+
+    try:
+        result = discover_website_task.delay(payload)
+        report = await asyncio.to_thread(
+            result.get,
+            timeout=settings.BROWSER_TASK_TIMEOUT_SECONDS,
+            propagate=True,
+        )
+    except CeleryTimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail="Website discovery timed out on the browser worker."
+        ) from exc
+    except Exception as exc:
+        logger.exception("Could not complete remote website discovery")
+        raise HTTPException(
+            status_code=503,
+            detail="Playwright worker is unavailable. Check the worker and Redis configuration."
+        ) from exc
+
+    if isinstance(report, dict) and report.get("_worker_error"):
+        raise HTTPException(
+            status_code=int(report.get("_status_code") or 502),
+            detail=report["_worker_error"],
+        )
+    return report
 
 
 # async def preview_scraping(request: ScraperPreviewRequest):
