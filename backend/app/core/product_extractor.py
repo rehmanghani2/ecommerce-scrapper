@@ -328,8 +328,38 @@ class ProductExtractor:
                     labels.append(label)
             if labels:
                 return labels
+        for node in soup.select('script[type="application/ld+json"]'):
+            try:
+                payload = json.loads(node.string or node.get_text() or "")
+            except (TypeError, ValueError):
+                continue
+            for record in self._walk_breadcrumb_jsonld(payload):
+                labels = []
+                for entry in record.get("itemListElement") or []:
+                    if not isinstance(entry, dict):
+                        continue
+                    label = entry.get("name")
+                    if not label and isinstance(entry.get("item"), dict):
+                        label = entry["item"].get("name")
+                    if label and str(label).strip().casefold() not in ("home", "homepage"):
+                        labels.append(str(label).strip())
+                if labels:
+                    return labels
         return []
 
+    @staticmethod
+    def _walk_breadcrumb_jsonld(payload):
+        if isinstance(payload, list):
+            for item in payload:
+                yield from ProductExtractor._walk_breadcrumb_jsonld(item)
+        elif isinstance(payload, dict):
+            kind = payload.get("@type", [])
+            kinds = kind if isinstance(kind, list) else [kind]
+            if any(str(value).rstrip("/").split("/")[-1].lower() == "breadcrumblist" for value in kinds):
+                yield payload
+            for value in payload.values():
+                if isinstance(value, (dict, list)):
+                    yield from ProductExtractor._walk_breadcrumb_jsonld(value)
     def _extract_platform_product(self, soup: BeautifulSoup, base_url: str):
         for node in soup.select('script[type="application/json"], script[id*="ProductJson" i]'):
             try:
