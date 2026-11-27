@@ -88,7 +88,7 @@ async def start_scraping(
         
         return ScraperResponse(
             success=True,
-            message="Scraping job started successfully",
+            message="Scraping job queued successfully",
             job_id=job_id,
             status="queued"
         )
