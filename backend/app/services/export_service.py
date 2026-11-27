@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 import logging
 
 from app.models.job import Job
@@ -53,7 +54,11 @@ class ExportService:
             raise ValueError(f"Job {job_id} not found")
         
         # Get products
-        query = select(Product).where(Product.job_id == job_id)
+        query = (
+            select(Product)
+            .options(selectinload(Product.images), selectinload(Product.variants))
+            .where(Product.job_id == job_id)
+        )
         result = await self.db.execute(query)
         products = result.scalars().all()
         
@@ -87,8 +92,8 @@ class ExportService:
         columns = [
             "Product ID", "SKU", "Name", "Description", "Price",
             "Original Price", "Currency", "In Stock", "Stock Quantity",
-            "URL", "Image URL", "Category", "Subcategory", "Category Path",
-            "Brand", "Manufacturer", "Rating", "Review Count",
+            "URL", "Image URL", "Images", "Variants", "Category", "Subcategory", "Category Path",
+            "Brand", "Manufacturer", "Tags", "Rating", "Review Count",
             "Source", "Scraped At"
         ]
         
@@ -109,11 +114,21 @@ class ExportService:
                     "Stock Quantity": product.stock_quantity or "",
                     "URL": product.url or "",
                     "Image URL": product.image_url or "",
+                    "Images": json.dumps([image.url for image in product.images], ensure_ascii=False),
+                    "Variants": json.dumps([
+                        {"variant_id": variant.variant_id, "sku": variant.sku, "name": variant.name,
+                         "price": str(variant.price) if variant.price is not None else None,
+                         "original_price": str(variant.original_price) if variant.original_price is not None else None,
+                         "in_stock": variant.in_stock, "stock_quantity": variant.stock_quantity,
+                         "attributes": variant.attributes, "image_url": variant.image_url}
+                        for variant in product.variants
+                    ], ensure_ascii=False),
                     "Category": product.category or "",
                     "Subcategory": product.subcategory or "",
                     "Category Path": product.category_path or "",
                     "Brand": product.brand or "",
                     "Manufacturer": product.manufacturer or "",
+                    "Tags": json.dumps(product.tags or [], ensure_ascii=False),
                     "Rating": product.rating or "",
                     "Review Count": product.review_count or "",
                     "Source": product.source_domain or "",
@@ -149,11 +164,21 @@ class ExportService:
                 "Stock Quantity": product.stock_quantity,
                 "URL": product.url,
                 "Image URL": product.image_url,
+                "Images": json.dumps([image.url for image in product.images], ensure_ascii=False),
+                "Variants": json.dumps([
+                    {"variant_id": variant.variant_id, "sku": variant.sku, "name": variant.name,
+                     "price": str(variant.price) if variant.price is not None else None,
+                     "original_price": str(variant.original_price) if variant.original_price is not None else None,
+                     "in_stock": variant.in_stock, "stock_quantity": variant.stock_quantity,
+                     "attributes": variant.attributes, "image_url": variant.image_url}
+                    for variant in product.variants
+                ], ensure_ascii=False),
                 "Category": product.category,
                 "Subcategory": product.subcategory,
                 "Category Path": product.category_path,
                 "Brand": product.brand,
                 "Manufacturer": product.manufacturer,
+                "Tags": json.dumps(product.tags or [], ensure_ascii=False),
                 "Rating": product.rating,
                 "Review Count": product.review_count,
                 "Specifications": json.dumps(product.specifications) if product.specifications else "",
@@ -213,17 +238,22 @@ class ExportService:
                 "category_path": product.category_path,
                 "brand": product.brand,
                 "manufacturer": product.manufacturer,
+                "tags": product.tags or [],
                 "specifications": product.specifications,
                 "features": product.features,
                 "rating": product.rating,
                 "review_count": product.review_count,
                 "variants": [
                     {
+                        "variant_id": v.variant_id,
                         "name": v.name,
                         "sku": v.sku,
-                        "price": float(v.price) if v.price else None,
+                        "price": float(v.price) if v.price is not None else None,
+                        "original_price": float(v.original_price) if v.original_price is not None else None,
                         "in_stock": v.in_stock,
+                        "stock_quantity": v.stock_quantity,
                         "attributes": v.attributes,
+                        "image_url": v.image_url,
                     }
                     for v in product.variants
                 ] if product.variants else [],
@@ -265,7 +295,10 @@ class ExportService:
             Path to exported file
         """
         # Build query
-        query = select(Product)
+        query = select(Product).options(
+            selectinload(Product.images),
+            selectinload(Product.variants),
+        )
         
         if domain:
             query = query.where(Product.source_domain.ilike(f"%{domain}%"))
