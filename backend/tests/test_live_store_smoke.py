@@ -21,7 +21,7 @@ def test_challenge_detection_does_not_attempt_to_solve():
 
 def test_link_filter_rejects_cross_host_and_duplicates(monkeypatch):
     adapter = SITE_ADAPTERS[0]
-    monkeypatch.setattr("app.scripts.live_store_smoke._is_public_http_url", lambda url: True)
+    monkeypatch.setattr("scripts.live_store_smoke._is_public_http_url", lambda url: True)
     links = _absolute_same_host_links(
         [
             "/collections/bikes",
