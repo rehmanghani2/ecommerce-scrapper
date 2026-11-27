@@ -37,4 +37,4 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          pytest -q tests/test_product_extractor_enhancements.py tests/test_platform_variant_extraction.py tests/test_export_variant_metadata.py tests/test_product_extractor_pipeline.py tests/test_site_adapters.py tests/test_live_store_smoke.py tests/test_sitemap_parser.py tests/test_scraper_preview_routes.py tests/test_discovery_browser_lifecycle.py
+          pytest -q tests/test_product_extractor_enhancements.py tests/test_platform_variant_extraction.py tests/test_export_variant_metadata.py tests/test_product_extractor_pipeline.py tests/test_site_adapters.py tests/test_live_store_smoke.py tests/test_sitemap_parser.py tests/test_scraper_preview_routes.py tests/test_discovery_browser_lifecycle.py tests/test_playwright_worker_architecture.py
