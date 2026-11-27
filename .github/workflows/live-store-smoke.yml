@@ -12,9 +12,8 @@ on:
 jobs:
   smoke:
     if: ${{ inputs.acknowledge_live_requests }}
-    # Pin the runner to Ubuntu 24.04: ubuntu-latest moved to Ubuntu 26.04,
-    # where Playwright 1.41's --with-deps package list references libasound2,
-    # which is no longer available under that package name.
+    # Use Ubuntu 24.04 with a Playwright release whose browser dependency
+    # metadata supports Noble's libasound2t64 package naming.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
@@ -30,8 +29,25 @@ jobs:
       - name: Install smoke-test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install playwright==1.41.0 beautifulsoup4==4.12.3 lxml==5.1.0
-          python -m playwright install --with-deps chromium
+          python -m pip install playwright==1.56.0 beautifulsoup4==4.12.3 lxml==5.1.0
+      - name: Install Chromium and system dependencies
+        run: python -m playwright install --with-deps chromium
+      - name: Verify Chromium launches
+        run: |
+          python - <<'PY'
+          import asyncio
+          from playwright.async_api import async_playwright
+
+          async def main():
+              async with async_playwright() as playwright:
+                  browser = await playwright.chromium.launch(headless=True)
+                  page = await browser.new_page()
+                  await page.set_content("<title>browser-ready</title>")
+                  assert await page.title() == "browser-ready"
+                  await browser.close()
+
+          asyncio.run(main())
+          PY
       - name: Run bounded live checks
         run: python scripts/live_store_smoke.py --output artifacts/store-smoke.json
       - name: Upload JSON report
