@@ -192,6 +192,7 @@ class ScraperEngine:
         from app.models.product import Product, ProductImage, ProductVariant
 
         saved_count = 0
+        processed_count = 0
         source_domain = (urlparse(self.start_url).hostname or "").lower()
         for data in products_data:
             name = str(data.get("name") or "").strip()
@@ -306,6 +307,7 @@ class ScraperEngine:
                         variant.image_url = variant_data["image_url"]
 
                 await savepoint.commit()
+                processed_count += 1
                 if is_new:
                     saved_count += 1
             except Exception:
@@ -313,8 +315,9 @@ class ScraperEngine:
                 if savepoint is not None:
                     await savepoint.rollback()
 
-        if saved_count:
+        if processed_count:
             await self.db.commit()
+        if saved_count:
             logger.info("[Job %s] Inserted %s new products", self.job_id, saved_count)
             await self._notifier.publish(
                 f"job:{self.job_id}",
