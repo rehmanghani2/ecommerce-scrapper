@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from app.models.database import get_db_context
 from app.models.job import Job, JobStatus
+from sqlalchemy import select
 from app.core.scraper_engine import ScraperEngine
 from app.worker.celery_app import celery_app
 
@@ -24,12 +25,16 @@ def execute_scrape_job(self, job_pk: int):
     return asyncio.run(_execute_scrape_job(job_pk, self.request.id))
 
 
-async def _execute_scrape_job(job_pk: int, task_id: str):
+async def _execute_scrape_job(job_identifier: int | str, task_id: str):
     async with get_db_context() as db:
-        job = await db.get(Job, job_pk)
+        if isinstance(job_identifier, int):
+            job = await db.get(Job, job_identifier)
+        else:
+            result = await db.execute(select(Job).where(Job.job_id == str(job_identifier)))
+            job = result.scalar_one_or_none()
         if not job:
-            logger.warning("Skipping missing job database id=%s", job_pk)
-            return {"status": "missing", "job_id": job_pk}
+            logger.warning("Skipping missing job identifier=%s", job_identifier)
+            return {"status": "missing", "job_id": str(job_identifier)}
         if job.status == JobStatus.CANCELLED:
             return {"status": "cancelled", "job_id": job.job_id}
 
