@@ -50,6 +50,10 @@ jobs:
           PY
       - name: Run bounded live checks
         run: python scripts/live_store_smoke.py --output artifacts/store-smoke.json
+        env:
+          # Executing a script by path puts backend/scripts on sys.path;
+          # add backend itself so imports such as app.core.* resolve.
+          PYTHONPATH: ${{ github.workspace }}/backend
       - name: Upload JSON report
         if: always()
         uses: actions/upload-artifact@v4
