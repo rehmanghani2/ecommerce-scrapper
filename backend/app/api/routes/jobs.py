@@ -295,8 +295,6 @@ async def retry_job(
     """
     Retry a failed job.
     """
-    from fastapi import BackgroundTasks
-    
     query = select(Job).where(Job.job_id == job_id)
     result = await db.execute(query)
     job = result.scalar_one_or_none()
