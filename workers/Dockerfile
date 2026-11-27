@@ -1,7 +1,6 @@
-# Dedicated Chromium runtime. Keep this Playwright image version aligned
-# with backend/requirements.txt.
 FROM mcr.microsoft.com/playwright/python:v1.41.0-jammy
 
+# Keep the Playwright browser image version aligned with backend/requirements.txt.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
