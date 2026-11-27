@@ -219,6 +219,9 @@ class ScraperEngine:
                     "upc": data.get("upc"),
                     "ean": data.get("ean") or data.get("gtin"),
                     "brand": data.get("brand"),
+                    "vendor": data.get("vendor") or data.get("brand"),
+                    "tags": data.get("tags") or [],
+                    "attributes": data.get("attributes") or {},
                     "price": self._to_decimal(data.get("price")),
                     "price_text": data.get("price_text") or (
                         str(data.get("price")) if data.get("price") is not None else None
@@ -299,6 +302,7 @@ class ScraperEngine:
                         )
                         self.db.add(variant)
                     variant.price = self._to_decimal(variant_data.get("price"))
+                    variant.original_price = self._to_decimal(variant_data.get("original_price"))
                     variant.in_stock = variant_data.get("in_stock", True)
                     variant.attributes = variant_data.get("attributes") or {}
                     if variant_data.get("stock_quantity") is not None:
