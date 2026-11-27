@@ -90,9 +90,11 @@ async def start_scraping(
             success=True,
             message="Scraping job started successfully",
             job_id=job_id,
-            status="pending"
+            status="queued"
         )
         
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500,
