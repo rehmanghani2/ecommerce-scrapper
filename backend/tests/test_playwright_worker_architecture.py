@@ -57,3 +57,21 @@ def test_worker_runs_scraper_engine_inside_its_own_async_loop():
 def test_worker_image_uses_playwright_browser_base_image():
     dockerfile = (REPO_ROOT / "workers" / "Dockerfile").read_text(encoding="utf-8")
     assert dockerfile.startswith("FROM mcr.microsoft.com/playwright/python:")
+
+
+
+def test_scheduled_jobs_dispatch_to_worker():
+    path = BACKEND / "app" / "services" / "scheduler_service.py"
+    source = path.read_text(encoding="utf-8")
+    endpoint = _function(ast.parse(source), "trigger_schedule")
+    endpoint_source = ast.get_source_segment(source, endpoint)
+    assert "execute_scrape_job.delay" in endpoint_source
+    assert "run_scraper_job" not in endpoint_source
+
+
+def test_failed_job_retry_dispatches_to_worker():
+    path = BACKEND / "app" / "api" / "routes" / "jobs.py"
+    source = path.read_text(encoding="utf-8")
+    endpoint = _function(ast.parse(source), "retry_job")
+    endpoint_source = ast.get_source_segment(source, endpoint)
+    assert "execute_scrape_job.delay" in endpoint_source
