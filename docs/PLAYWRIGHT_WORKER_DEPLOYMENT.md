@@ -77,5 +77,6 @@ the task and the job status/products update in the shared database.
 - The worker must have outbound access to public storefronts and access to the
   shared database/Redis. Keep the existing public-target validation and
   robots/access-challenge stop behavior. Do not bypass CAPTCHAs or 403 responses.
+- FastAPI Cloud enables scale-to-zero by default. Its in-process schedule polling loop may not run continuously while the API is idle; move schedule triggering to Celery Beat or another always-on scheduler before relying on unattended recurring runs.
 - The API no longer downloads Chromium at startup. Browser binaries exist only
   in the dedicated worker image.
