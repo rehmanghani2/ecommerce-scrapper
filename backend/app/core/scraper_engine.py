@@ -19,6 +19,7 @@ This file does NOT:
 - Contain Playwright low-level logic
 """
 
+import asyncio
 from typing import Optional, List, Dict, Any
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
@@ -57,6 +58,7 @@ class ScraperEngine:
         self._scheduler: Optional[CrawlScheduler] = None
         
         self._notifier = JobEventNotifier()
+        self._product_save_lock = asyncio.Lock()
 
     async def start(self):
         """
@@ -181,6 +183,11 @@ class ScraperEngine:
             return None
 
     async def _on_products_found(self, products_data: List[Dict[str, Any]]):
+        """Serialize database writes because one AsyncSession is shared by crawl tasks."""
+        async with self._product_save_lock:
+            await self._persist_products(products_data)
+
+    async def _persist_products(self, products_data: List[Dict[str, Any]]):
         """Upsert products within this job using canonical product URLs."""
         from app.models.product import Product, ProductImage, ProductVariant
 
@@ -192,7 +199,9 @@ class ScraperEngine:
             if not name or not url:
                 continue
 
+            savepoint = None
             try:
+                savepoint = await self.db.begin_nested()
                 result = await self.db.execute(
                     select(Product).where(
                         Product.job_id == self.job_id,
@@ -296,11 +305,13 @@ class ScraperEngine:
                     if variant_data.get("image_url"):
                         variant.image_url = variant_data["image_url"]
 
+                await savepoint.commit()
                 if is_new:
                     saved_count += 1
             except Exception:
                 logger.exception("[Job %s] Failed to persist product URL %s", self.job_id, url)
-                await self.db.rollback()
+                if savepoint is not None:
+                    await savepoint.rollback()
 
         if saved_count:
             await self.db.commit()
