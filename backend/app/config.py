@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = Field(default="redis://localhost:6379/0")
     CELERY_BROKER_URL: str = Field(default="redis://localhost:6379/1")
     CELERY_RESULT_BACKEND: str = Field(default="redis://localhost:6379/2")
+    BROWSER_TASK_TIMEOUT_SECONDS: int = Field(default=120, env="BROWSER_TASK_TIMEOUT_SECONDS")
     
     # Scraper Settings
     MAX_CONCURRENT_BROWSERS: int = 5
