@@ -25,6 +25,7 @@ class ProductExtractor:
             "sku": "[itemprop='sku']::attr(content), [data-sku]::attr(data-sku)",
             "brand": "[itemprop='brand']::attr(content), .product-brand, .brand",
             "description": "[itemprop='description'], .product-description",
+            "availability": "[itemprop='availability']::attr(href), [itemprop='availability']::attr(content), .stock-status, .availability",
         },
     }
 
@@ -141,7 +142,12 @@ class ProductExtractor:
         match = re.search(r"\d[\d,]*(?:\.\d{1,4})?", raw)
         if not match:
             return None, raw, ProductExtractor._currency_from_text(raw)
-        numeric = match.group(0).replace(",", "")
+        numeric = match.group(0)
+        if "," in numeric and "." in numeric:
+            numeric = numeric.replace(",", "")
+        elif "," in numeric:
+            whole, fraction = numeric.rsplit(",", 1)
+            numeric = f"{whole}.{fraction}" if len(fraction) in (1, 2) else f"{whole}{fraction}"
         return numeric, raw, ProductExtractor._currency_from_text(raw)
 
     @staticmethod
@@ -181,8 +187,10 @@ class ProductExtractor:
 
         availability = str(product.get("availability") or "").lower()
         if availability:
+            compact_availability = re.sub(r"[^a-z]", "", availability)
             product["in_stock"] = not any(
-                marker in availability for marker in ("outofstock", "soldout", "discontinued")
+                marker in compact_availability
+                for marker in ("outofstock", "soldout", "discontinued", "unavailable")
             )
             product["stock_status"] = "In Stock" if product["in_stock"] else "Out of Stock"
 
