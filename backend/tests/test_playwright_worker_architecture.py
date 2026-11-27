@@ -22,7 +22,7 @@ def test_discovery_endpoint_dispatches_to_worker_instead_of_launching_browser():
     tree = _source_tree(BACKEND / "app" / "api" / "routes" / "scraper.py")
     endpoint = _function(tree, "discover_website")
     source = ast.get_source_segment(
-        (ROOT / "app" / "api" / "routes" / "scraper.py").read_text(encoding="utf-8"),
+        (BACKEND / "app" / "api" / "routes" / "scraper.py").read_text(encoding="utf-8"),
         endpoint,
     )
     assert "discover_website_task.delay" in source
@@ -30,7 +30,7 @@ def test_discovery_endpoint_dispatches_to_worker_instead_of_launching_browser():
 
 
 def test_start_endpoint_queues_crawl_instead_of_using_api_background_tasks():
-    tree = _source_tree(ROOT / "app" / "api" / "routes" / "scraper.py")
+    tree = _source_tree(BACKEND / "app" / "api" / "routes" / "scraper.py")
     endpoint = _function(tree, "start_scraping")
     source = ast.get_source_segment(
         (ROOT / "app" / "api" / "routes" / "scraper.py").read_text(encoding="utf-8"),
