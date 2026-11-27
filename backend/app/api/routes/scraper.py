@@ -912,10 +912,13 @@ async def parse_sitemap(payload: Dict[str, Any]):
         raise HTTPException(status_code=400, detail="sitemap_url is required")
 
     from app.core.sitemap_parser import sitemap_parser
-    result = await sitemap_parser.fetch_and_parse(
-        sitemap_url=sitemap_url,
-        filter_products_only=filter_products
-    )
+    try:
+        result = await sitemap_parser.fetch_and_parse(
+            sitemap_url=sitemap_url,
+            filter_products_only=filter_products
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     return result
 
 
