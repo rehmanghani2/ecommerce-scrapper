@@ -171,10 +171,12 @@ async def discover_website(payload: Dict[str, Any]):
         raise HTTPException(status_code=400, detail="Provide a valid public HTTP or HTTPS website URL.")
 
     from playwright.async_api import async_playwright
+    from app.scrapers.site_adapters import get_site_adapter
     from urllib.parse import urljoin, urlparse
     from xml.etree import ElementTree
     import re
 
+    adapter = get_site_adapter(url)
     browser = None
     try:
         async with async_playwright() as playwright:
@@ -204,35 +206,49 @@ async def discover_website(payload: Dict[str, Any]):
             if not _is_public_target(final_url):
                 raise HTTPException(status_code=400, detail="The website redirected to a non-public address.")
 
-            page_data = await page.evaluate("""() => {
-              const text = (el) => (el?.innerText || el?.textContent || '').trim().replace(/\s+/g, ' ');
+            adapter_config = {
+                "productContainer": adapter.selector_config["product_container"] if adapter else (
+                    '[itemtype*="Product"], [data-product-id], [data-testid*="product"], .product, .product-item, .product-card, li.product'
+                ),
+                "categorySelectors": list(adapter.category_selectors) if adapter else [],
+            }
+            page_data = await page.evaluate("""(config) => {
+              const text = (el) => (el?.innerText || el?.textContent || '').trim().replace(/\\s+/g, ' ');
+              const matchesAny = (el, selectors) => selectors.some(selector => {
+                try { return el.matches(selector); } catch (_) { return false; }
+              });
               const anchors = Array.from(document.querySelectorAll('a[href]')).slice(0, 500).map(a => ({
                 href: a.getAttribute('href'),
                 label: text(a).slice(0, 180),
-                aria: (a.getAttribute('aria-label') || '').slice(0, 180)
+                aria: (a.getAttribute('aria-label') || '').slice(0, 180),
+                isAdapterCategory: matchesAny(a, config.categorySelectors)
               }));
               const jsonLd = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
                 .map(s => s.textContent || '').join(' ').slice(0, 12000);
-              const productNodes = Array.from(document.querySelectorAll(
-                '[itemtype*="Product"], [data-product-id], [data-testid*="product"], .product, .product-item, .product-card, li.product'
-              )).slice(0, 30);
+              let productNodes = [];
+              try { productNodes = Array.from(document.querySelectorAll(config.productContainer)).slice(0, 30); }
+              catch (_) {}
+              const productLinks = productNodes.flatMap(node =>
+                Array.from(node.querySelectorAll('a[href]')).map(a => a.getAttribute('href'))
+              ).filter(Boolean).slice(0, 100);
               return {
                 title: document.title || '',
                 description: document.querySelector('meta[name="description"]')?.content || '',
                 canonical: document.querySelector('link[rel="canonical"]')?.href || location.href,
                 links: anchors,
+                productLinks,
                 jsonLd,
                 productNodeCount: productNodes.length,
                 headings: Array.from(document.querySelectorAll('h1,h2')).slice(0, 30).map(text),
                 platformSignals: {
-                  shopify: /cdn\.shopify\.com|Shopify\.theme|shopify-section/i.test(document.documentElement.innerHTML),
+                  shopify: /cdn\\.shopify\\.com|Shopify\\.theme|shopify-section/i.test(document.documentElement.innerHTML),
                   woocommerce: /woocommerce|wc-block/i.test(document.documentElement.innerHTML),
                   magento: /Magento_|mage\\//i.test(document.documentElement.innerHTML),
                   bigcommerce: /bigcommerce|stencil-utils/i.test(document.documentElement.innerHTML),
                   prestashop: /prestashop/i.test(document.documentElement.innerHTML)
                 }
               };
-            }""")
+            }""", adapter_config)
 
             links = []
             seen = set()
@@ -253,7 +269,7 @@ async def discover_website(payload: Dict[str, Any]):
                 label = item.get("label") or item.get("aria") or parsed_path.rstrip("/").split("/")[-1].replace("-", " ").replace("_", " ").title()
                 if excluded.search(parsed_path):
                     continue
-                if category_pattern.search(parsed_path) or any(word in label.lower() for word in ("shop all", "all products", "accessories", "clothing", "bikes", "bicycles", "components")):
+                if item.get("is_adapter_category") or category_pattern.search(parsed_path) or any(word in label.lower() for word in ("shop all", "all products", "accessories", "clothing", "bikes", "bicycles", "components")):
                     category_items.append({
                         "name": label[:120],
                         "url": item["url"],
@@ -261,6 +277,11 @@ async def discover_website(payload: Dict[str, Any]):
                     })
                 elif product_pattern.search(parsed_path):
                     product_candidates.append(item["url"])
+
+            for href in page_data.get("productLinks", []):
+                candidate = _normalise_discovery_url(href, final_url)
+                if candidate and candidate != final_url:
+                    product_candidates.append(candidate)
 
             sitemap_urls = []
             sitemap_status = "not_found"
