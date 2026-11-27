@@ -2,7 +2,8 @@ import ast
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+BACKEND = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _function(tree, name):
@@ -18,7 +19,7 @@ def _source_tree(path):
 
 
 def test_discovery_endpoint_dispatches_to_worker_instead_of_launching_browser():
-    tree = _source_tree(ROOT / "app" / "api" / "routes" / "scraper.py")
+    tree = _source_tree(BACKEND / "app" / "api" / "routes" / "scraper.py")
     endpoint = _function(tree, "discover_website")
     source = ast.get_source_segment(
         (ROOT / "app" / "api" / "routes" / "scraper.py").read_text(encoding="utf-8"),
@@ -49,5 +50,5 @@ def test_worker_runs_scraper_engine_inside_its_own_async_loop():
 
 
 def test_worker_image_uses_playwright_browser_base_image():
-    dockerfile = (ROOT.parent.parent / "workers" / "Dockerfile").read_text(encoding="utf-8")
+    dockerfile = (REPO_ROOT / "workers" / "Dockerfile").read_text(encoding="utf-8")
     assert dockerfile.startswith("FROM mcr.microsoft.com/playwright/python:")
