@@ -12,7 +12,10 @@ on:
 jobs:
   smoke:
     if: ${{ inputs.acknowledge_live_requests }}
-    runs-on: ubuntu-latest
+    # Pin the runner to Ubuntu 24.04: ubuntu-latest moved to Ubuntu 26.04,
+    # where Playwright 1.41's --with-deps package list references libasound2,
+    # which is no longer available under that package name.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
