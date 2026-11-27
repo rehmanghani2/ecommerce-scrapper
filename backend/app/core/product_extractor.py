@@ -82,7 +82,12 @@ class ProductExtractor:
                 products.append(product)
         platform_product = self._extract_platform_product(soup, base_url)
         if platform_product:
-            existing = next((item for item in products if item.get("url") == platform_product.get("url")), None)
+            platform_identity = self._identity(platform_product, base_url)
+            existing = next((
+                item for item in products
+                if item.get("url") == platform_product.get("url")
+                or self._identity(item, base_url) == platform_identity
+            ), None)
             if existing:
                 if platform_product.get("variants"):
                     existing["variants"] = platform_product["variants"]
@@ -369,7 +374,7 @@ class ProductExtractor:
             original = self._parse_price(variant.get("compare_at_price"))[0]
             variants.append({"variant_id": str(variant.get("id") or ""), "sku": variant.get("sku"), "name": variant.get("public_title") or variant.get("title") or record.get("title") or "Variant", "price": price, "original_price": original, "in_stock": bool(variant.get("available", False)), "stock_quantity": variant.get("inventory_quantity"), "attributes": attributes, "image_url": urljoin(base_url, str(image)) if image else None})
         first = (record.get("variants") or [{}])[0]
-        return {"name": record.get("title"), "description": BeautifulSoup(record.get("body_html") or "", "lxml").get_text(" ", strip=True), "sku": first.get("sku"), "product_id": str(record.get("id")) if record.get("id") else None, "brand": record.get("vendor"), "price": self._parse_price(first.get("price"))[0], "currency": self._currency_from_text(str(first.get("price") or "")), "url": urljoin(base_url, "/products/" + str(record.get("handle"))) if record.get("handle") else base_url, "image_url": images[0] if images else None, "images": images, "variants": variants, "platform": "shopify", "product_type": record.get("product_type"), "tags": record.get("tags") or []}
+        return {"name": record.get("title"), "description": BeautifulSoup(record.get("body_html") or "", "lxml").get_text(" ", strip=True), "sku": first.get("sku"), "product_id": str(record.get("id")) if record.get("id") else None, "brand": record.get("vendor"), "price": self._parse_price(first.get("price"))[0], "currency": self._currency_from_text(str(first.get("price") or "")), "in_stock": bool(first.get("available", False)), "stock_quantity": first.get("inventory_quantity"), "url": urljoin(base_url, "/products/" + str(record.get("handle"))) if record.get("handle") else base_url, "image_url": images[0] if images else None, "images": images, "variants": variants, "platform": "shopify", "product_type": record.get("product_type"), "tags": record.get("tags") or []}
 
     def _from_woocommerce(self, soup: BeautifulSoup, variations: List[Dict[str, Any]], base_url: str):
         title = soup.select_one("h1.product_title, .product_title, h1.entry-title")
@@ -390,7 +395,8 @@ class ProductExtractor:
             variant_image = (image_data.get("full_src") or image_data.get("src")) if isinstance(image_data, dict) else None
             variants.append({"variant_id": str(variation.get("variation_id") or ""), "sku": variation.get("sku"), "name": " / ".join(str(v) for v in attrs.values()) or name, "price": self._parse_price(variation.get("display_price"))[0], "original_price": self._parse_price(variation.get("display_regular_price"))[0], "in_stock": bool(variation.get("is_in_stock", False)), "stock_quantity": variation.get("max_qty"), "attributes": attrs, "image_url": urljoin(base_url, str(variant_image)) if variant_image else None})
         canonical = soup.find("link", rel="canonical")
-        return {"name": name, "sku": sku_node.get_text(" ", strip=True) if sku_node else None, "price": self._parse_price(raw_price)[0], "currency": self._currency_from_text(raw_price or ""), "url": urljoin(base_url, canonical.get("href")) if canonical and canonical.get("href") else base_url, "image_url": urljoin(base_url, image) if image else None, "images": [urljoin(base_url, image)] if image else [], "variants": variants, "platform": "woocommerce"}
+        first_variant = variations[0] if variations else {}
+        return {"name": name, "sku": sku_node.get_text(" ", strip=True) if sku_node else None, "price": self._parse_price(raw_price)[0], "currency": self._currency_from_text(raw_price or ""), "in_stock": bool(first_variant.get("is_in_stock")) if first_variant else None, "stock_quantity": first_variant.get("max_qty") if first_variant else None, "url": urljoin(base_url, canonical.get("href")) if canonical and canonical.get("href") else base_url, "image_url": urljoin(base_url, image) if image else None, "images": [urljoin(base_url, image)] if image else [], "variants": variants, "platform": "woocommerce"}
     def _from_meta(self, soup: BeautifulSoup, base_url: str):
         def meta(*names):
             for name in names:
