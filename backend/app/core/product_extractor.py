@@ -1,11 +1,11 @@
 """
-Generic product extraction with CSS selectors and JSON-LD fallback.
+Generic product extraction with CSS selectors and Schema.org/Open Graph fallbacks.
 """
 import json
 import logging
 import re
 from typing import Any, Dict, List, Optional
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urldefrag, urlparse
 
 from bs4 import BeautifulSoup
 
@@ -24,8 +24,8 @@ class ProductExtractor:
             "url": "a::attr(href), [itemprop='url']::attr(href)",
             "sku": "[itemprop='sku']::attr(content), [data-sku]::attr(data-sku)",
             "brand": "[itemprop='brand']::attr(content), .product-brand, .brand",
-            "description": "[itemprop='description'], .product-description"
-        }
+            "description": "[itemprop='description'], .product-description",
+        },
     }
 
     def __init__(self, selector_config: Optional[Dict[str, Any]] = None):
@@ -50,13 +50,16 @@ class ProductExtractor:
                             item[field] = value
                     except Exception as exc:
                         logger.debug("Could not extract %s: %s", field, exc)
+
                 if item.get("name") or item.get("price"):
+                    item["images"] = self._extract_images(container, base_url)
                     self._normalise(item, base_url)
-                    if item.get("url") not in seen:
-                        seen.add(item.get("url"))
+                    key = self._identity(item, base_url)
+                    if key not in seen:
+                        seen.add(key)
                         products.append(item)
 
-        # Product structured data is often more reliable than storefront CSS.
+        # Structured data is usually more reliable than storefront CSS.
         for node in soup.select('script[type="application/ld+json"]'):
             try:
                 payload = json.loads(node.string or node.get_text() or "")
@@ -64,16 +67,33 @@ class ProductExtractor:
                 continue
             for record in self._walk_jsonld(payload):
                 product = self._from_jsonld(record, base_url)
-                if product and product.get("url") not in seen:
-                    seen.add(product.get("url"))
-                    products.append(product)
+                if product:
+                    key = self._identity(product, base_url)
+                    if key not in seen:
+                        seen.add(key)
+                        products.append(product)
 
-        # A product detail page may not contain a product-card wrapper.
+        # Product detail pages often have no product-card wrapper or JSON-LD.
         if not products:
             product = self._from_meta(soup, base_url)
             if product:
                 products.append(product)
         return products
+
+    @staticmethod
+    def _identity(product: Dict[str, Any], base_url: str) -> str:
+        """Prefer stable product identifiers over a listing-page fallback URL."""
+        sku = str(product.get("sku") or "").strip().casefold()
+        if sku:
+            return f"sku:{sku}"
+        url = str(product.get("url") or "").strip()
+        if url and url != base_url:
+            clean_url = urldefrag(url)[0].rstrip("/").casefold()
+            if clean_url:
+                return f"url:{clean_url}"
+        name = re.sub(r"\s+", " ", str(product.get("name") or "")).strip().casefold()
+        brand = str(product.get("brand") or "").strip().casefold()
+        return f"name:{brand}:{name}" if name else f"fallback:{url}"
 
     def _extract_field(self, container, selector: str):
         if not selector:
@@ -96,57 +116,137 @@ class ProductExtractor:
                 continue
         return None
 
+    @staticmethod
+    def _extract_images(container, base_url: str) -> List[str]:
+        images = []
+        for image in container.select("img"):
+            source = (
+                image.get("data-src")
+                or image.get("data-lazy-src")
+                or image.get("data-original")
+                or image.get("src")
+            )
+            if not source:
+                continue
+            absolute = urljoin(base_url, str(source).strip())
+            if absolute not in images:
+                images.append(absolute)
+        return images
+
+    @staticmethod
+    def _parse_price(value: Any):
+        if value in (None, ""):
+            return None, None, None
+        raw = str(value).strip()
+        match = re.search(r"\d[\d,]*(?:\.\d{1,4})?", raw)
+        if not match:
+            return None, raw, ProductExtractor._currency_from_text(raw)
+        numeric = match.group(0).replace(",", "")
+        return numeric, raw, ProductExtractor._currency_from_text(raw)
+
+    @staticmethod
+    def _currency_from_text(value: str):
+        text = str(value or "").upper()
+        if "£" in text or "GBP" in text:
+            return "GBP"
+        if "€" in text or "EUR" in text:
+            return "EUR"
+        if "$" in text or "USD" in text:
+            return "USD"
+        return None
+
     def _normalise(self, product: Dict[str, Any], base_url: str) -> None:
         for key in ("url", "image_url"):
             if product.get(key):
-                product[key] = urljoin(base_url, product[key])
+                product[key] = urljoin(base_url, str(product[key]).strip())
         if not product.get("url"):
             product["url"] = base_url
-        if product.get("price"):
-            match = re.search(r"\d[\d,.]*", str(product["price"]))
-            if match:
-                product["price_text"] = str(product["price"])
-                product["price"] = match.group(0).replace(",", "")
+
+        raw_price = product.get("price")
+        if raw_price is not None:
+            numeric, price_text, currency = self._parse_price(raw_price)
+            if numeric is not None:
+                product["price"] = numeric
+            if price_text:
+                product["price_text"] = price_text
+            if currency and not product.get("currency"):
+                product["currency"] = currency
+
+        images = product.get("images") or []
+        if product.get("image_url") and product["image_url"] not in images:
+            images.insert(0, product["image_url"])
+        product["images"] = images
+        if not product.get("image_url") and images:
+            product["image_url"] = images[0]
+
+        availability = str(product.get("availability") or "").lower()
+        if availability:
+            product["in_stock"] = not any(
+                marker in availability for marker in ("outofstock", "soldout", "discontinued")
+            )
+            product["stock_status"] = "In Stock" if product["in_stock"] else "Out of Stock"
 
     def _walk_jsonld(self, payload):
+        """Walk JSON-LD arrays, graphs and nested variant/product structures."""
         if isinstance(payload, list):
             for item in payload:
                 yield from self._walk_jsonld(item)
         elif isinstance(payload, dict):
-            graph = payload.get("@graph")
-            if graph:
-                yield from self._walk_jsonld(graph)
             kind = payload.get("@type", [])
             kinds = kind if isinstance(kind, list) else [kind]
-            if any(str(value).lower() == "product" for value in kinds):
+            if any(str(value).rstrip("/").split("/")[-1].lower() == "product" for value in kinds):
                 yield payload
+
+            for key in ("@graph", "mainEntity", "itemListElement", "hasVariant"):
+                nested = payload.get(key)
+                if nested:
+                    if key == "itemListElement" and isinstance(nested, list):
+                        for entry in nested:
+                            if isinstance(entry, dict):
+                                yield from self._walk_jsonld(entry.get("item", entry))
+                    else:
+                        yield from self._walk_jsonld(nested)
 
     def _from_jsonld(self, record: Dict[str, Any], base_url: str):
         name = record.get("name")
         offers = record.get("offers") or {}
         if isinstance(offers, list):
             offers = offers[0] if offers else {}
+        if not isinstance(offers, dict):
+            offers = {}
+
         brand = record.get("brand") or {}
         if isinstance(brand, dict):
             brand = brand.get("name")
         image = record.get("image")
-        if isinstance(image, list):
-            image = image[0] if image else None
-        if isinstance(image, dict):
-            image = image.get("url")
-        url = record.get("url") or record.get("@id") or base_url
-        if not name and not offers:
+        images = image if isinstance(image, list) else ([image] if image else [])
+        images = [
+            value.get("url") if isinstance(value, dict) else value
+            for value in images
+        ]
+        images = [urljoin(base_url, str(value)) for value in images if value]
+        image = images[0] if images else None
+
+        price = offers.get("price")
+        if price is None:
+            price = offers.get("lowPrice")
+        url = record.get("url") or record.get("@id") or offers.get("url") or base_url
+        if not name and price is None:
             return None
+
         item = {
             "name": name,
             "description": record.get("description"),
             "sku": record.get("sku") or record.get("mpn"),
             "brand": brand,
-            "price": offers.get("price"),
+            "price": price,
             "currency": offers.get("priceCurrency"),
             "availability": offers.get("availability"),
-            "image_url": image,
             "url": url,
+            "image_url": image,
+            "images": images,
+            "product_id": record.get("productID") or record.get("productId"),
+            "gtin": record.get("gtin13") or record.get("gtin12") or record.get("gtin"),
         }
         self._normalise(item, base_url)
         return {key: value for key, value in item.items() if value not in (None, "")}
@@ -158,11 +258,20 @@ class ProductExtractor:
                 if tag and tag.get("content"):
                     return tag["content"].strip()
             return None
+
         name = meta("og:title", "twitter:title") or (soup.title.get_text(strip=True) if soup.title else None)
         price = meta("product:price:amount", "og:price:amount")
         image = meta("og:image", "twitter:image")
+        description = meta("og:description", "description")
         if not name or not (price or image):
             return None
-        item = {"name": name, "price": price, "image_url": image, "url": base_url}
+        item = {
+            "name": name,
+            "price": price,
+            "currency": meta("product:price:currency", "og:price:currency"),
+            "image_url": image,
+            "description": description,
+            "url": base_url,
+        }
         self._normalise(item, base_url)
         return item
