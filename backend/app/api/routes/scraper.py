@@ -1029,7 +1029,7 @@ async def start_bulk_scraping(
         url=valid_urls[0],
         domain=domain,
         job_type=JobType.PRODUCT_LIST,
-        status=JobStatus.PENDING,
+        status=JobStatus.QUEUED,
         user_id=current_user.id if current_user else 1,
         total_pages=len(valid_urls),
         config={
