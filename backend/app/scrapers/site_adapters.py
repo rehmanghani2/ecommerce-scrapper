@@ -50,19 +50,19 @@ SITE_ADAPTERS = (
         "leeli-cycles", "Leeli Cycles", ("leelicycles.co.uk",), "generic",
         ".product-card, .product-item, .product, li.product, [data-product-id]",
         ("a[rel='next']", ".pagination a.next", "a.next.page-numbers"),
-        ("nav a[href*='/collections/']", "nav a[href*='/category/']", ".menu a"),
+        ("nav a[href*='/collections/']", "nav a[href*='/category/']"),
     ),
     _profile(
         "ballicom", "Ballicom", ("ballicom.co.uk",), "generic",
         ".product-item, .product-card, .product, li.product, [data-product-id]",
         ("a[rel='next']", ".pagination a.next", ".pages a.next"),
-        ("nav a[href*='/category/']", "nav a[href*='/categories/']", ".menu a"),
+        ("nav a[href*='/category/']", "nav a[href*='/categories/']"),
     ),
     _profile(
         "exertis-store", "Exertis Store", ("store.exertis.co.uk",), "generic",
         ".product-item, .product-card, .product-tile, [data-product-id], [data-product]",
         ("a[rel='next']", ".pagination a.next", "a[aria-label*='Next']"),
-        ("nav a[href*='/category/']", "nav a[href*='/catalog/']", ".navigation a"),
+        ("nav a[href*='/category/']", "nav a[href*='/catalog/']"),
     ),
     _profile(
         "rs-components", "RS Components UK", ("uk.rs-online.com",), "generic",
