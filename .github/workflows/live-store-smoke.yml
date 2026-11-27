@@ -1,0 +1,40 @@
+name: Live storefront smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      acknowledge_live_requests:
+        description: "Confirm that you are authorised to test these public storefronts and that robots.txt will be respected."
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  smoke:
+    if: ${{ inputs.acknowledge_live_requests }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install smoke-test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright==1.41.0 beautifulsoup4==4.12.3 lxml==5.1.0
+          python -m playwright install --with-deps chromium
+      - name: Run bounded live checks
+        run: python scripts/live_store_smoke.py --output artifacts/store-smoke.json
+      - name: Upload JSON report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-store-smoke-report
+          path: backend/artifacts/store-smoke.json
+          if-no-files-found: ignore
