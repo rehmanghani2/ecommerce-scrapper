@@ -221,7 +221,7 @@ async def discover_website(payload: Dict[str, Any]):
                 href: a.getAttribute('href'),
                 label: text(a).slice(0, 180),
                 aria: (a.getAttribute('aria-label') || '').slice(0, 180),
-                isAdapterCategory: matchesAny(a, config.categorySelectors)
+                is_adapter_category: matchesAny(a, config.categorySelectors)
               }));
               const jsonLd = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
                 .map(s => s.textContent || '').join(' ').slice(0, 12000);
@@ -452,6 +452,12 @@ async def discover_website(payload: Dict[str, Any]):
                 "platform": detected_platform,
                 "platform_signals": platform_signals,
                 "discovery": {
+                    "site_adapter": ({
+                        "key": adapter.key,
+                        "name": adapter.name,
+                        "platform_hint": adapter.platform_hint,
+                        "selector_profile": "configured_candidate",
+                    } if adapter else None),
                     "categories": unique_categories,
                     "category_tree": category_tree,
                     "category_count": len(unique_categories),
