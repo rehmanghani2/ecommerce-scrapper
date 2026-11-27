@@ -20,7 +20,7 @@ logger = get_task_logger(__name__)
     acks_late=True,
     reject_on_worker_lost=True,
 )
-def execute_scrape_job(self, job_pk: int):
+def execute_scrape_job(self, job_pk: int | str):
     """Run one persisted crawl job using Playwright in this worker process."""
     return asyncio.run(_execute_scrape_job(job_pk, self.request.id))
 
@@ -77,3 +77,31 @@ def discover_website_task(payload: dict):
             "_worker_error": str(exc)[:300],
             "_status_code": 502,
         }
+
+
+
+@celery_app.task(
+    name="scraper.execute_bulk_job",
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def execute_bulk_scrape_job(
+    self,
+    job_pk: int,
+    urls: list,
+    concurrency: int = 10,
+    request_delay: float = 0.5,
+    custom_selectors: dict | None = None,
+):
+    """Run bulk product extraction in the isolated browser worker."""
+    from app.api.routes.scraper import run_bulk_scraper_job
+
+    return asyncio.run(
+        run_bulk_scraper_job(
+            job_pk,
+            urls,
+            concurrency,
+            request_delay,
+            custom_selectors,
+        )
+    )
