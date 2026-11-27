@@ -490,7 +490,6 @@ async def discover_website(payload: Dict[str, Any]):
             await browser.close()
 
 
-@router.post("/preview", response_model=DetectedSelectors)
 # async def preview_scraping(request: ScraperPreviewRequest):
 #     """
 #     Preview scraping for a URL.
