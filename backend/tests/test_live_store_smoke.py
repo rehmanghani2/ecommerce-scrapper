@@ -3,6 +3,7 @@ from scripts.live_store_smoke import (
     _is_challenge,
     _normalise_host,
     _same_storefront,
+    _classify_readiness,
 )
 from app.scrapers.site_adapters import SITE_ADAPTERS
 
@@ -91,3 +92,26 @@ def test_leeli_category_selectors_include_non_navigation_collection_links():
     leeli = next(adapter for adapter in SITE_ADAPTERS if adapter.key == "leeli-cycles")
     assert "a[href*='/collections/']" in leeli.category_selectors
     assert "nav a[href*='/collections/']" not in leeli.category_selectors
+
+
+def test_readiness_classifies_robots_denial():
+    result = _classify_readiness({"robots": "robots.txt could not be checked: HTTP 403 Forbidden", "status": "skipped_robots"})
+    assert result["outcome"] == "robots_check_blocked"
+    assert result["product_extraction_verified"] is False
+
+
+def test_readiness_distinguishes_dns_failure():
+    result = _classify_readiness({"status": "blocked", "public_address_check": {"is_public": False, "error": "gaierror: Name or service not known"}})
+    assert result["outcome"] == "dns_resolution_failed"
+
+
+def test_readiness_does_not_treat_category_candidates_as_verified_products():
+    result = _classify_readiness({"status": "completed", "robots": "allowed by robots.txt", "category_candidates": 213, "root_product_cards": 0, "category_pages": [{"loaded": False, "error": "HTTP 403"}]})
+    assert result["outcome"] == "category_access_denied"
+    assert result["product_extraction_verified"] is False
+
+
+def test_readiness_requires_product_detail_record():
+    result = _classify_readiness({"status": "completed", "robots": "allowed by robots.txt", "category_candidates": 2, "product_page": {"loaded": True, "extracted_records": 1}})
+    assert result["outcome"] == "product_extraction_verified"
+    assert result["product_extraction_verified"] is True
