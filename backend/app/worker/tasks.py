@@ -81,6 +81,7 @@ def discover_website_task(payload: dict):
 
 
 @celery_app.task(
+    bind=True,
     name="scraper.execute_bulk_job",
     acks_late=True,
     reject_on_worker_lost=True,
