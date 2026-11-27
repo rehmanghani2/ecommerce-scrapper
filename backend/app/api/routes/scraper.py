@@ -996,7 +996,6 @@ async def parse_bulk_file(payload: Dict[str, Any]):
 @router.post("/bulk/start")
 async def start_bulk_scraping(
     payload: Dict[str, Any],
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
@@ -1045,22 +1044,33 @@ async def start_bulk_scraping(
     await db.commit()
     await db.refresh(job)
 
-    # Launch bulk scraping in background
-    background_tasks.add_task(
-        run_bulk_scraper_job,
-        job.id,
-        valid_urls,
-        concurrency,
-        request_delay,
-        custom_selectors
-    )
+    # Dispatch bulk extraction to the dedicated browser worker.
+    try:
+        from app.worker.tasks import execute_bulk_scrape_job
+        queued_task = execute_bulk_scrape_job.delay(
+            job.id,
+            valid_urls,
+            concurrency,
+            request_delay,
+            custom_selectors,
+        )
+        job.celery_task_id = queued_task.id
+        await db.commit()
+    except Exception as queue_error:
+        job.status = JobStatus.FAILED
+        job.error_message = f"Could not enqueue bulk scraping job: {queue_error}"
+        await db.commit()
+        raise HTTPException(
+            status_code=503,
+            detail="Scraping queue is unavailable. Please try again shortly."
+        ) from queue_error
 
     return {
         "success": True,
-        "message": f"Bulk scraping job started for {len(valid_urls)} URLs",
+        "message": f"Bulk scraping job queued for {len(valid_urls)} URLs",
         "job_id": job_id,
         "total_urls": len(valid_urls),
-        "status": "pending",
+        "status": "queued",
     }
 
 
