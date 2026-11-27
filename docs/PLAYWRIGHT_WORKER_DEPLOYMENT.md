@@ -9,11 +9,11 @@ worker because the worker image installs the matching Playwright browser runtime
 - **Redis**: Celery broker/result backend and the existing application pub/sub.
 - **PostgreSQL**: shared job and product database.
 - **Playwright worker**: Celery worker built from `workers/Dockerfile`; runs
-  browser discovery and full-site crawl jobs.
+  browser discovery, full-site crawl, and bulk extraction jobs.
 
 The API's `POST /api/v1/scraper/discover` dispatches bounded discovery to
 `scraper.discover_website` and waits for its result. The API's
-`POST /api/v1/scraper/start` queues `scraper.execute_job`; it does not launch
+`POST /api/v1/scraper/start`, `/bulk/start`, retries, and scheduled jobs use Celery worker tasks; they do not launch
 Chromium or use FastAPI in-process background tasks.
 
 ## Deploy the worker (Railway or another Docker worker host)
