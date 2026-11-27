@@ -36,8 +36,17 @@ class ProductExtractor:
 
     def extract(self, html: str, base_url: str) -> List[Dict[str, Any]]:
         soup = BeautifulSoup(html or "", "lxml")
-        selectors = self.selector_config.get("fields", {})
-        container_selector = self.selector_config.get("product_container")
+        # Apply a host-specific profile for the initial UK validation stores.
+        # Unknown domains continue using the generic selector configuration.
+        from app.scrapers.site_adapters import get_site_adapter
+        adapter = get_site_adapter(base_url)
+        active_config = (
+            adapter.selector_config
+            if adapter and self.selector_config is self.DEFAULT_SELECTORS
+            else self.selector_config
+        )
+        selectors = active_config.get("fields", {})
+        container_selector = active_config.get("product_container")
         products: List[Dict[str, Any]] = []
         seen = set()
         breadcrumbs = self._extract_breadcrumbs(soup)
