@@ -104,14 +104,15 @@ def _absolute_same_host_links(values: list[str], base_url: str, adapter: SiteAda
     for value in values:
         candidate = urljoin(base_url, (value or "").strip())
         parsed = urlparse(candidate)
+        canonical_key = parsed._replace(netloc=_normalise_host(parsed.hostname)).geturl()
         if (
             parsed.scheme not in {"http", "https"}
             or not _same_storefront(candidate, adapter)
-            or candidate in seen
+            or canonical_key in seen
             or not _is_public_http_url(candidate)
         ):
             continue
-        seen.add(candidate)
+        seen.add(canonical_key)
         result.append(candidate)
     return result
 
