@@ -8,6 +8,8 @@ import gzip
 import io
 import logging
 import re
+import ipaddress
+import socket
 import xml.etree.ElementTree as ET
 from typing import List, Dict, Any, Optional, Set
 from urllib.parse import urlparse
@@ -40,10 +42,33 @@ PRODUCT_PATH_PATTERNS = [
 class SitemapParser:
     """Parser for remote and local XML / GZ sitemaps."""
 
-    def __init__(self, timeout: float = 20.0, max_depth: int = 3, max_urls: int = 15000):
+    def __init__(self, timeout: float = 20.0, max_depth: int = 3, max_urls: int = 15000, max_sitemaps: int = 100):
         self.timeout = timeout
         self.max_depth = max_depth
         self.max_urls = max_urls
+        self.max_sitemaps = max_sitemaps
+
+    @staticmethod
+    def _is_public_http_url(url: str, expected_host: Optional[str] = None) -> bool:
+        """Fail closed for non-HTTP, credentialed, cross-host or non-public sitemap URLs."""
+        try:
+            parsed = urlparse(url)
+            if parsed.scheme not in ("http", "https") or not parsed.hostname:
+                return False
+            if parsed.username or parsed.password:
+                return False
+            host = parsed.hostname.lower().rstrip(".")
+            if expected_host and host != expected_host:
+                return False
+            if host in {"localhost", "localhost.localdomain"} or host.endswith(".local"):
+                return False
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+            return bool(addresses) and all(
+                ipaddress.ip_address(item[4][0]).is_global for item in addresses
+            )
+        except (OSError, ValueError, TypeError, OverflowError):
+            return False
 
     def parse_xml_content(self, raw_bytes: bytes, url: str = "") -> Dict[str, Any]:
         """
@@ -156,6 +181,13 @@ class SitemapParser:
         if headers:
             default_headers.update(headers)
 
+        parsed_start = urlparse(sitemap_url)
+        expected_host = (parsed_start.hostname or "").lower().rstrip(".")
+        if not self._is_public_http_url(sitemap_url, expected_host):
+            raise ValueError("Sitemap URL must resolve to a public HTTP(S) address.")
+        if proxy_url:
+            raise ValueError("Proxy-based sitemap fetching is disabled for SSRF-safe discovery.")
+
         discovered_urls: Set[str] = set()
         visited_sitemaps: Set[str] = set()
         sitemap_queue: List[tuple] = [(sitemap_url, 0)]  # (url, depth)
@@ -164,16 +196,17 @@ class SitemapParser:
         client_kwargs: Dict[str, Any] = {
             "headers": default_headers,
             "timeout": self.timeout,
-            "follow_redirects": True,
-            "verify": False,
+            "follow_redirects": False,
+            "verify": True,
         }
-        if proxy_url:
-            client_kwargs["proxy"] = proxy_url
 
         async with httpx.AsyncClient(**client_kwargs) as client:
-            while sitemap_queue and len(discovered_urls) < self.max_urls:
+            while sitemap_queue and len(discovered_urls) < self.max_urls and len(visited_sitemaps) < self.max_sitemaps:
                 curr_sitemap, depth = sitemap_queue.pop(0)
                 if curr_sitemap in visited_sitemaps:
+                    continue
+                if not self._is_public_http_url(curr_sitemap, expected_host):
+                    logger.warning("Skipping unsafe or cross-host sitemap URL: %s", curr_sitemap)
                     continue
                 visited_sitemaps.add(curr_sitemap)
 
@@ -181,6 +214,14 @@ class SitemapParser:
                     resp = await client.get(curr_sitemap)
                     if resp.status_code != 200:
                         logger.warning(f"Sitemap {curr_sitemap} returned HTTP {resp.status_code}")
+                        continue
+                    # Redirects are intentionally not followed: validate any new host explicitly
+                    # before allowing a subsequent request.
+                    if str(resp.url) != curr_sitemap:
+                        logger.warning("Skipping redirected sitemap response: %s", curr_sitemap)
+                        continue
+                    if len(resp.content) > 10 * 1024 * 1024:
+                        logger.warning("Skipping oversized sitemap: %s", curr_sitemap)
                         continue
 
                     parsed = self.parse_xml_content(resp.content, curr_sitemap)
@@ -194,11 +235,14 @@ class SitemapParser:
                                 child_sitemaps = prod_sitemaps
 
                         for child in child_sitemaps:
-                            if child not in visited_sitemaps:
+                            if child not in visited_sitemaps and self._is_public_http_url(child, expected_host):
                                 sitemap_queue.append((child, depth + 1))
                     else:
                         for entry in parsed["entries"]:
                             loc = entry["loc"]
+                            parsed_loc = urlparse(loc)
+                            if parsed_loc.scheme not in ("http", "https") or (parsed_loc.hostname or "").lower().rstrip(".") != expected_host:
+                                continue
                             if filter_products_only and not self.is_likely_product_url(loc):
                                 continue
                             if loc not in discovered_urls:
