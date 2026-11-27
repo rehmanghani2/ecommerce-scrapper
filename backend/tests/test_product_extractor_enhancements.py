@@ -1,3 +1,5 @@
+from app.core.product_extractor import ProductExtractor
+
 def test_extracts_nested_jsonld_and_product_image_gallery():
     html = """
     <script type="application/ld+json">
@@ -54,6 +56,8 @@ def test_extracts_currency_availability_and_lazy_image_from_card():
     assert product["url"] == "https://shop.example/products/helmet"
     assert product["image_url"] == "https://shop.example/images/helmet.webp"
     assert len(product["images"]) == 2
+    assert product["in_stock"] is False
+    assert product["stock_status"] == "Out of Stock"
 
 
 def test_deduplicates_product_cards_by_sku():
@@ -73,3 +77,46 @@ def test_deduplicates_product_cards_by_sku():
     """
     products = ProductExtractor().extract(html, "https://shop.example/catalog")
     assert len(products) == 1
+
+
+
+def test_extracts_jsonld_product_variants_without_emitting_them_as_products():
+    html = """
+    <script type="application/ld+json">
+    {
+      "@type": "Product",
+      "name": "Running Shoe",
+      "sku": "SHOE-BASE",
+      "offers": {"price": "100.00", "priceCurrency": "GBP"},
+      "hasVariant": [
+        {
+          "@type": "Product",
+          "name": "Running Shoe - Size 9",
+          "sku": "SHOE-9",
+          "size": "9",
+          "offers": {
+            "price": "105.00",
+            "availability": "https://schema.org/InStock"
+          }
+        },
+        {
+          "@type": "Product",
+          "name": "Running Shoe - Size 10",
+          "sku": "SHOE-10",
+          "size": "10",
+          "offers": {
+            "price": "110.00",
+            "availability": "https://schema.org/OutOfStock"
+          }
+        }
+      ]
+    }
+    </script>
+    """
+    products = ProductExtractor().extract(html, "https://shop.example/products/running-shoe")
+
+    assert len(products) == 1
+    assert len(products[0]["variants"]) == 2
+    assert products[0]["variants"][0]["sku"] == "SHOE-9"
+    assert products[0]["variants"][0]["price"] == "105.00"
+    assert products[0]["variants"][1]["in_stock"] is False
