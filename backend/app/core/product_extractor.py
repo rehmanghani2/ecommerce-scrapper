@@ -122,14 +122,16 @@ class ProductExtractor:
 
         source = str(product.get("source_domain") or urlparse(base_url).hostname or "").lower()
         url = DataCleaner._canonicalize_url(product.get("url") or base_url)
-        if url:
+        canonical_base = DataCleaner._canonicalize_url(base_url)
+        if url and url != canonical_base:
             return f"url:{source}:{url}"
 
         for field in ("gtin", "ean", "upc", "sku", "product_id"):
             value = re.sub(r"[^a-z0-9]", "", str(product.get(field) or "").casefold())
             if len(value) >= 3 and value not in {"unknown", "none", "null", "default"}:
                 return f"{field}:{source}:{value}"
-        return f"unidentified:{source}:{str(product.get('name') or '').casefold()}"
+        # Missing product URLs and identifiers are not safe grounds for merging.
+        return f"unidentified:{source}:{id(product)}"
 
     def _extract_field(self, container, selector: str):
         if not selector:
