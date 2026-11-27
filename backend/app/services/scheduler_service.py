@@ -101,7 +101,7 @@ class SchedulerService:
     async def trigger_schedule(self, schedule_id: int) -> Optional[int]:
         """
         Execute a scheduled job, create a corresponding Job in DB,
-        update last_run_at & next_run_at, and dispatch run_scraper_job.
+        update last_run_at & next_run_at, and dispatch the browser worker task.
         Returns the created Job's integer ID.
         """
         async with get_db_context() as db:
