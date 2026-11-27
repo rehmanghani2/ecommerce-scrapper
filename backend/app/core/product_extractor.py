@@ -205,7 +205,7 @@ class ProductExtractor:
             if any(str(value).rstrip("/").split("/")[-1].lower() == "product" for value in kinds):
                 yield payload
 
-            for key in ("@graph", "mainEntity", "itemListElement", "hasVariant"):
+            for key in ("@graph", "mainEntity", "itemListElement"):
                 nested = payload.get(key)
                 if nested:
                     if key == "itemListElement" and isinstance(nested, list):
@@ -242,6 +242,40 @@ class ProductExtractor:
         if not name and price is None:
             return None
 
+        variants = []
+        raw_variants = record.get("hasVariant") or []
+        if isinstance(raw_variants, dict):
+            raw_variants = [raw_variants]
+        for variant in raw_variants if isinstance(raw_variants, list) else []:
+            if not isinstance(variant, dict):
+                continue
+            variant_offers = variant.get("offers") or {}
+            if isinstance(variant_offers, list):
+                variant_offers = variant_offers[0] if variant_offers else {}
+            if not isinstance(variant_offers, dict):
+                variant_offers = {}
+            variant_price = variant_offers.get("price")
+            variant_availability = str(variant_offers.get("availability") or "").lower()
+            variant_image = variant.get("image")
+            if isinstance(variant_image, list):
+                variant_image = variant_image[0] if variant_image else None
+            if isinstance(variant_image, dict):
+                variant_image = variant_image.get("url")
+            attributes = {
+                key: variant[key]
+                for key in ("size", "color", "colour", "material", "pattern")
+                if variant.get(key) not in (None, "")
+            }
+            variants.append({
+                "variant_id": str(variant.get("productID") or variant.get("sku") or ""),
+                "sku": variant.get("sku"),
+                "name": variant.get("name") or name or "Variant",
+                "price": variant_price,
+                "in_stock": not any(marker in re.sub(r"[^a-z]", "", variant_availability) for marker in ("outofstock", "soldout", "discontinued")),
+                "attributes": attributes,
+                "image_url": urljoin(base_url, str(variant_image)) if variant_image else None,
+            })
+
         item = {
             "name": name,
             "description": record.get("description"),
@@ -255,6 +289,7 @@ class ProductExtractor:
             "images": images,
             "product_id": record.get("productID") or record.get("productId"),
             "gtin": record.get("gtin13") or record.get("gtin12") or record.get("gtin"),
+            "variants": variants,
         }
         self._normalise(item, base_url)
         return {key: value for key, value in item.items() if value not in (None, "")}
