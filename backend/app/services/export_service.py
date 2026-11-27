@@ -238,17 +238,22 @@ class ExportService:
                 "category_path": product.category_path,
                 "brand": product.brand,
                 "manufacturer": product.manufacturer,
+                "tags": product.tags or [],
                 "specifications": product.specifications,
                 "features": product.features,
                 "rating": product.rating,
                 "review_count": product.review_count,
                 "variants": [
                     {
+                        "variant_id": v.variant_id,
                         "name": v.name,
                         "sku": v.sku,
-                        "price": float(v.price) if v.price else None,
+                        "price": float(v.price) if v.price is not None else None,
+                        "original_price": float(v.original_price) if v.original_price is not None else None,
                         "in_stock": v.in_stock,
+                        "stock_quantity": v.stock_quantity,
                         "attributes": v.attributes,
+                        "image_url": v.image_url,
                     }
                     for v in product.variants
                 ] if product.variants else [],
