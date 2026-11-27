@@ -154,7 +154,10 @@ class ScraperEngine:
                     image_urls = [data["image_url"], *image_urls]
                 existing_images = set()
                 if not is_new:
-                    existing_images = {image.url for image in (product.images or [])}
+                    image_result = await self.db.execute(
+                        select(ProductImage.url).where(ProductImage.product_id == product.id)
+                    )
+                    existing_images = set(image_result.scalars().all())
                 for index, image_url in enumerate(image_urls):
                     if isinstance(image_url, str) and image_url and image_url not in existing_images:
                         self.db.add(ProductImage(
