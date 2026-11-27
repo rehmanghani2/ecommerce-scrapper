@@ -97,7 +97,7 @@ class ScraperEngine:
 
     async def _on_products_found(self, products_data: List[Dict[str, Any]]):
         """Upsert products within this job using canonical product URLs."""
-        from app.models.product import Product, ProductImage
+        from app.models.product import Product, ProductImage, ProductVariant
 
         saved_count = 0
         source_domain = (urlparse(self.start_url).hostname or "").lower()
@@ -166,6 +166,38 @@ class ScraperEngine:
                             position=index,
                             is_primary=(index == 0),
                         ))
+                # Upsert structured variants when the source exposes them in JSON-LD.
+                for variant_data in data.get("variants") or []:
+                    variant_name = str(variant_data.get("name") or "").strip()
+                    if not variant_name:
+                        continue
+                    variant_id = str(variant_data.get("variant_id") or "").strip() or None
+                    variant_sku = str(variant_data.get("sku") or "").strip() or None
+                    variant_query = select(ProductVariant).where(ProductVariant.product_id == product.id)
+                    if variant_id:
+                        variant_query = variant_query.where(ProductVariant.variant_id == variant_id)
+                    elif variant_sku:
+                        variant_query = variant_query.where(ProductVariant.sku == variant_sku)
+                    else:
+                        variant_query = variant_query.where(ProductVariant.name == variant_name)
+                    variant_result = await self.db.execute(variant_query.limit(1))
+                    variant = variant_result.scalar_one_or_none()
+                    if variant is None:
+                        variant = ProductVariant(
+                            product_id=product.id,
+                            variant_id=variant_id,
+                            sku=variant_sku,
+                            name=variant_name,
+                        )
+                        self.db.add(variant)
+                    variant.price = self._to_decimal(variant_data.get("price"))
+                    variant.in_stock = variant_data.get("in_stock", True)
+                    variant.attributes = variant_data.get("attributes") or {}
+                    if variant_data.get("stock_quantity") is not None:
+                        variant.stock_quantity = variant_data["stock_quantity"]
+                    if variant_data.get("image_url"):
+                        variant.image_url = variant_data["image_url"]
+
                 if is_new:
                     saved_count += 1
             except Exception:
