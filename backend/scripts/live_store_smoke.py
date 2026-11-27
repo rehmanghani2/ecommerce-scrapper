@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import ipaddress
+from functools import lru_cache
 import json
 import re
 import socket
@@ -52,6 +53,17 @@ def _normalise_host(host: str | None) -> str:
     return host[4:] if host.startswith("www.") else host
 
 
+@lru_cache(maxsize=512)
+def _host_is_public(host: str, port: int) -> bool:
+    try:
+        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        return bool(addresses) and all(
+            ipaddress.ip_address(item[4][0]).is_global for item in addresses
+        )
+    except (OSError, ValueError, TypeError, OverflowError):
+        return False
+
+
 def _is_public_http_url(url: str) -> bool:
     try:
         parsed = urlparse(url)
@@ -63,10 +75,7 @@ def _is_public_http_url(url: str) -> bool:
         if host == "localhost" or host.endswith(".local"):
             return False
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
-        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-        return bool(addresses) and all(
-            ipaddress.ip_address(item[4][0]).is_global for item in addresses
-        )
+        return _host_is_public(host, port)
     except (OSError, ValueError, TypeError, OverflowError):
         return False
 
@@ -159,9 +168,14 @@ async def _inspect_site(adapter: SiteAdapter, browser) -> dict[str, Any]:
                 is_main_frame = route.request.frame.parent_frame is None
             except Exception:
                 is_main_frame = False
-            if is_main_frame and not _same_storefront(request_url, adapter):
-                await route.abort("blockedbyclient")
-                return
+            if is_main_frame:
+                if not _same_storefront(request_url, adapter):
+                    await route.abort("blockedbyclient")
+                    return
+                robots_ok, _ = _robots_allows(request_url)
+                if not robots_ok:
+                    await route.abort("blockedbyclient")
+                    return
         await route.continue_()
 
     await context.route("**/*", guard_request)
