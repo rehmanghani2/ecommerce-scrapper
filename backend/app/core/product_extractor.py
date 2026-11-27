@@ -96,7 +96,6 @@ class ProductExtractor:
                 item for item in products
                 if item.get("url") == platform_product.get("url")
                 or self._identity(item, base_url) == platform_identity
-                or str(item.get("name") or "").strip().casefold() == str(platform_product.get("name") or "").strip().casefold()
             ), None)
             if existing:
                 if platform_product.get("variants"):
@@ -112,22 +111,27 @@ class ProductExtractor:
                 product.setdefault("category", breadcrumbs[-1])
                 product.setdefault("subcategory", breadcrumbs[-2] if len(breadcrumbs) > 1 else None)
                 product.setdefault("category_path", " > ".join(breadcrumbs))
-        return products
+        # Final normalization and conservative exact-identity deduplication.
+        from app.core.data_cleaner import DataCleaner
+        return DataCleaner(base_url=base_url).clean_products(products)
 
     @staticmethod
     def _identity(product: Dict[str, Any], base_url: str) -> str:
-        """Prefer stable product identifiers over a listing-page fallback URL."""
-        sku = str(product.get("sku") or "").strip().casefold()
-        if sku:
-            return f"sku:{sku}"
-        url = str(product.get("url") or "").strip()
-        if url and url != base_url:
-            clean_url = urldefrag(url)[0].rstrip("/").casefold()
-            if clean_url:
-                return f"url:{clean_url}"
-        name = re.sub(r"\s+", " ", str(product.get("name") or "")).strip().casefold()
-        brand = str(product.get("brand") or "").strip().casefold()
-        return f"name:{brand}:{name}" if name else f"fallback:{url}"
+        """Build a conservative, retailer-scoped identity; URL variants stay distinct."""
+        from app.core.data_cleaner import DataCleaner
+
+        source = str(product.get("source_domain") or urlparse(base_url).hostname or "").lower()
+        url = DataCleaner._canonicalize_url(product.get("url") or base_url)
+        canonical_base = DataCleaner._canonicalize_url(base_url)
+        if url and url != canonical_base:
+            return f"url:{source}:{url}"
+
+        for field in ("gtin", "ean", "upc", "sku", "product_id"):
+            value = re.sub(r"[^a-z0-9]", "", str(product.get(field) or "").casefold())
+            if len(value) >= 3 and value not in {"unknown", "none", "null", "default"}:
+                return f"{field}:{source}:{value}"
+        # Missing product URLs and identifiers are not safe grounds for merging.
+        return f"unidentified:{source}:{id(product)}"
 
     def _extract_field(self, container, selector: str):
         if not selector:
